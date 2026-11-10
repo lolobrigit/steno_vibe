@@ -1,0 +1,370 @@
+// English — the default language and the source of truth for keys.
+// Other locales must define exactly the same keys with the same {placeholders}.
+
+const en: Record<string, string> = {
+  // ── SEO / document ──
+  'seo.title': 'STENO — speech to text in your browser: local Whisper and cloud',
+  'seo.description':
+    'Transcribe audio and video to text. Runs locally in the browser with Whisper (files never leave your device) or through OpenAI, Groq, Deepgram and any OpenAI-compatible API. Speaker labels, subtitles, AI summaries.',
+  'seo.h1': 'audio and video transcription, locally in the browser and in the cloud',
+
+  // ── common ──
+  'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.copy': 'Copy',
+  'common.copied': 'Copied',
+  'common.delete': 'Delete',
+  'common.retry': 'Retry',
+  'u.sec': 's',
+  'u.min': 'min',
+  'speaker.n': 'Speaker {n}',
+
+  // ── header ──
+  'hdr.tagline': 'SPEECH → TEXT',
+  'hdr.status.idle': 'READY',
+  'hdr.status.rec': 'RECORDING',
+  'hdr.status.load': 'LOADING MODEL',
+  'hdr.status.proc': 'TRANSCRIBING',
+  'hdr.private': 'AUDIO STAYS ON THIS DEVICE',
+  'hdr.uploaded': 'FILE IS SENT TO THE SERVICE',
+  'hdr.guideAria': 'Which model to choose',
+  'hdr.guideTitle': 'Model → quality',
+  'hdr.settings': 'Settings and models',
+  'hdr.theme': 'Theme',
+  'hdr.theme.dark': 'Dark',
+  'hdr.theme.light': 'Light',
+  'hdr.theme.neutral': 'Neutral',
+
+  // ── quality guide ──
+  'guide.1.tier': 'Draft',
+  'guide.1.text': 'Speed over accuracy: voice notes, searching a recording. Expect mistakes in names and terms.',
+  'guide.2.tier': 'Working quality',
+  'guide.2.text': 'Clean speech without noise: podcasts, lectures, one-on-one interviews.',
+  'guide.3.tier': 'High · on device',
+  'guide.3.text': 'The best you can get without uploading: noise, accents, music, many languages. Needs Chrome or Edge with a GPU.',
+  'guide.4.tier': 'High · cloud',
+  'guide.4.text': 'The same large model without an 800 MB download and almost instantly. The file is sent to the service.',
+  'guide.5.tier': 'Maximum',
+  'guide.5.text': 'Business calls, telephony, difficult recordings. Nova-3 is especially good with interruptions and phone audio.',
+
+  // ── source panel ──
+  'src.aria': 'Audio source',
+  'src.title': 'Source',
+  'src.clear': 'clear',
+  'src.clearAria': 'Remove file',
+  'src.dropAria': 'Upload an audio or video file',
+  'src.drop': 'Drop audio or video here',
+  'src.dropSub': 'or click to choose',
+  'src.loading': 'Loading file…',
+  'src.loadingSub': 'decoding and preparing audio',
+  'src.decodeFailed': 'the format cannot be read even after conversion — only cloud mode is available',
+  'src.decodeFailedShort': 'the format cannot be read locally',
+
+  // ── recording ──
+  'rec.mic': 'Microphone',
+  'rec.tab': 'Tab audio (meeting)',
+  'rec.screen': 'Screen video',
+  'rec.screen.hint': 'Record video of a screen, window or tab with its sound and your microphone',
+  'rec.camera': 'Camera video',
+  'rec.camera.hint': 'Record video from the camera with the microphone',
+  'rec.stop': 'Stop',
+  'rec.mixed': 'shared audio + your microphone',
+  'rec.tabOnly': 'shared audio only',
+  'rec.videoNote': 'The video is kept in this browser; only its audio track is transcribed.',
+  'rec.silence': 'Auto-stop on silence · 10 s',
+  'rec.fileName': 'Recording',
+  'rec.err.unsupported': 'Recording is not supported in this browser.',
+  'rec.err.noDisplay': 'Screen and tab capture is not supported here — use Chrome or Edge on a desktop.',
+  'rec.err.noAudio': 'No sound was shared: enable “Also share audio” in the picker or allow the microphone.',
+  'rec.err.micDenied': 'No access to the microphone. Allow it in the browser.',
+  'rec.err.camDenied': 'No access to the camera or microphone. Allow it in the browser.',
+  'rec.err.displayDenied': 'Screen sharing was cancelled or not allowed.',
+  'rec.err.noMic': 'No microphone found.',
+  'rec.err.noCamera': 'No camera found.',
+
+  // ── folder watch ──
+  'folder.watch': 'Watch a folder',
+  'folder.stop': 'stop',
+  'folder.unsupported': 'Folder watching works in Chrome and Edge only',
+  'folder.note': 'New audio and video files in the folder are queued automatically. Works while this tab is open.',
+  'folder.queue': 'Queue',
+  'folder.clearDone': 'clear finished',
+  'folder.err.lost': 'Access to the folder was lost — choose it again',
+  'folder.err.open': 'Could not open the folder',
+
+  // ── file confirm ──
+  'file.confirmTitle': 'Load this file?',
+  'file.load': 'Load',
+  'file.preparing': 'Loading and preparing audio…',
+
+  // ── engine panel ──
+  'eng.aria': 'Recognition engine',
+  'eng.title': 'Engine',
+  'eng.mode': 'Mode',
+  'eng.local': 'Local',
+  'eng.cloud': 'Cloud',
+  'eng.decodeFailed':
+    'The browser could not decode this file, so local mode is unavailable. Switch to “Cloud” or convert the file to wav/mp3.',
+  'eng.localModel': 'Whisper model (on device)',
+  'eng.quality': 'quality {n} of 5',
+  'eng.noGpuHeavy': 'WebGPU is unavailable — this model will be very slow. Open Chrome or Edge, or choose Small.',
+  'eng.noGpu': 'WebGPU not detected — the model will run on the CPU (WASM), slower.',
+  'eng.cloudModel': 'Service and model',
+  'eng.customNote': 'Your own OpenAI-compatible service. The file is sent to this address.',
+  'eng.addEndpoint': 'Add your own service',
+  'eng.apiKey': '{provider} API key',
+  'eng.getKey': 'get a key',
+  'eng.showKey': 'Show key',
+  'eng.hideKey': 'Hide key',
+  'eng.diarOn': 'Speakers: separate',
+  'eng.diarOff': 'Speakers: do not separate',
+  'eng.diarNote':
+    'Runs locally in the browser: pyannote + WeSpeaker (about 45 MB of models on first use, cached afterwards). Less accurate than Deepgram — short lines and interruptions may be mixed up.',
+  'eng.glossaries': 'Glossaries for Whisper',
+  'eng.glossNote':
+    'Terms are passed to Whisper as a vocabulary hint, so rare words and abbreviations are recognized more accurately. The same terms are added to LLM prompts.',
+  'eng.speechLang': 'Spoken language',
+  'eng.langAuto': 'Auto-detect',
+  'eng.task': 'Task',
+  'eng.transcription': 'Transcription',
+  'eng.translate': 'Translation → EN',
+
+  // ── local models ──
+  'lm.tiny.q': 'draft quality',
+  'lm.tiny.best': 'Quick notes and drafts of clean speech. Mixes up names and rare words.',
+  'lm.base.q': 'basic quality',
+  'lm.base.best': 'Voice memos and dictation. Still weak for languages other than English.',
+  'lm.small.q': 'good quality',
+  'lm.small.best': 'The sweet spot for a browser: clean speech, podcasts, lectures without heavy noise.',
+  'lm.large-v3-turbo.q': 'best on device',
+  'lm.large-v3-turbo.best': 'The best quality on your device: noise, accents, music. Needs WebGPU (Chrome or Edge).',
+
+  // ── cloud models ──
+  'cm.groq-turbo': 'The best balance: a large model on fast Groq hardware. Has a free tier.',
+  'cm.groq-v3': 'Maximum Whisper quality, many times faster than real time.',
+  'cm.openai-whisper': 'The classic API. Stable, supports translation into English.',
+  'cm.openai-4o': 'OpenAI’s flagship speech recognition model.',
+  'cm.openai-4o-mini': 'Cheaper and faster, slightly below the flagship in quality.',
+  'cm.deepgram-nova3': 'Strong on business speech and telephony; returns speakers and sentence timestamps.',
+
+  // ── main panel ──
+  'main.aria': 'Transcription',
+  'main.transcribe': 'Transcribe',
+  'main.hint': 'Upload a file or record your voice, a tab or video — then press “Transcribe”',
+  'main.needKey': 'Enter the {provider} API key on the left',
+  'main.queueBusy': 'processing the folder queue…',
+
+  // ── status line ──
+  'st.converting': 'The browser cannot read this format — converting…',
+  'st.preparingModel': 'Preparing the model…',
+  'st.downloadingModel': 'Downloading the model…',
+  'st.initModel': 'Starting the model ({device})…',
+  'st.transcribing': 'Recognizing speech…',
+  'st.diarizing': 'Identifying speakers…',
+  'st.sending': 'Sending to {service}…',
+
+  // ── task list ──
+  'task.aria': 'Running tasks',
+  'task.title': 'Tasks',
+  'task.error': 'error',
+  'task.cancelled': 'cancelled',
+  'task.decode': 'Decoding audio',
+  'task.convert': 'Converting audio (ffmpeg)',
+  'task.model': 'Loading the Whisper model',
+  'task.asr': 'Speech recognition',
+  'task.dia': 'Diarization (speakers)',
+  'task.d.loadConverter': 'loading the converter',
+  'task.d.downloadModels': 'downloading models',
+  'task.d.analyze': 'analyzing audio',
+  'task.d.noSpeakers': 'no speakers found',
+  'task.d.skipped': 'failed — skipped',
+  'task.d.timeout': 'timed out — skipped',
+
+  // ── transcript view ──
+  'tv.duration': 'Duration',
+  'tv.elapsed': 'Processed in',
+  'tv.words': 'Words',
+  'tv.language': 'Language',
+  'tv.speakers': 'Speakers',
+  'tv.renameHint': 'click a name to rename',
+  'tv.rename': 'Rename speaker',
+  'tv.jump': 'Jump to this moment',
+  'tv.reassign': 'Reassign the speaker of this line',
+  'tv.format': 'Text export format',
+  'tv.plain': 'Plain text',
+  'tv.stamped': 'With speakers and timecodes',
+
+  // ── player ──
+  'pl.seek': 'Seek',
+  'pl.seekHint': 'Click to seek, ←/→ for ±5 s',
+  'pl.play': 'Play',
+  'pl.pause': 'Pause',
+
+  // ── AI panel ──
+  'ai.title': 'AI processing of the transcript',
+  'ai.engine': 'AI engine',
+  'ai.localTitle': 'Qwen3 in the browser — the text goes nowhere',
+  'ai.model': 'LLM model',
+  'ai.localNote':
+    'A local model in the browser (downloaded on first use, cached afterwards). The text never leaves the device; quality is lower than cloud models and long texts are truncated.',
+  'ai.cloudNote': 'The transcript text is sent to {provider}.',
+  'ai.needKey': '{provider} needs an API key — enter it in the engine panel',
+  'ai.needKeyShort': '{provider} key required',
+  'ai.withGlossary': 'Uses a glossary',
+  'ai.customPlaceholder': 'Your prompt: “rewrite as an email to a client”, “pull out the quotes”, “translate into English”…',
+  'ai.customLabel': 'Custom prompt',
+  'ai.run': 'Run prompt',
+  'ai.downloading': 'Downloading the model',
+  'ai.generating': 'The local model is processing the text…',
+  'ai.result': 'Result',
+  'ai.act.grammar': 'Grammar',
+  'ai.act.cleanup': 'Clean up speech',
+  'ai.act.summary': 'Summary',
+  'ai.act.fixup': 'Fix terms',
+  'ai.act.tasks': 'Action items',
+  'llm.hint.fast': 'fast',
+  'llm.hint.better': 'more accurate',
+  'llm.hint.max': 'best (WebGPU)',
+
+  // ── history & storage ──
+  'hist.title': 'History · in this browser',
+  'hist.empty': 'Uploaded files and transcripts will appear here (stored locally)',
+  'hist.uploaded': 'uploaded',
+  'hist.remove': 'Delete entry',
+  'stor.aria': 'Local storage',
+  'stor.files': 'Files',
+  'stor.manage': 'manage',
+  'stor.hide': 'hide',
+  'stor.media': 'Media files',
+  'stor.deleteAll': 'delete all',
+  'stor.none': 'No saved files.',
+  'stor.modelsNote': 'Models are managed in Settings (the gear icon in the header).',
+
+  // ── downloads ──
+  'dl.pause': 'Pause',
+  'dl.resume': 'Resume',
+  'dl.cancel': 'Cancel the download and delete the partial data',
+  'dl.paused': 'Paused',
+  'dl.queued': 'queued',
+  'dl.queuedNote': 'Waiting for the current download to finish',
+  'dl.verifying': 'verifying the checksum',
+  'dl.reconnecting': 'connection lost — reconnecting',
+  'dl.err.quota': 'The browser storage is full. Delete unused models or files and resume.',
+  'dl.err.network': 'Could not download {file}: the connection keeps dropping. Check the network and resume — the download continues from where it stopped.',
+  'dl.err.hash': 'The file {file} is corrupted (checksum mismatch). Start the download again.',
+  'dl.err.noBuild': 'This repository has no model build suitable for this browser.',
+
+  // ── settings ──
+  'set.title': 'Settings',
+  'set.tabs': 'Settings sections',
+  'set.tab.general': 'General',
+  'set.tab.downloads': 'Models',
+  'set.tab.endpoints': 'Services',
+  'set.tab.buttons': 'LLM buttons',
+  'set.tab.glossaries': 'Glossaries',
+  'set.lang': 'Interface language',
+  'set.langNote': 'This changes the interface only. The spoken language of a recording is chosen in the engine panel.',
+
+  'set.dl.intro':
+    'Models are downloaded from huggingface.co and stored in the browser. Download them in advance and the first transcription starts without waiting. A download can be paused and resumed — it continues from the same byte, even after the page is reloaded.',
+  'set.dl.storage': 'Storage',
+  'set.dl.low': 'running low — delete unused models',
+  'set.dl.free': 'Free',
+  'set.dl.confirmTitle': 'Download the model?',
+  'set.dl.confirmText': 'The files are saved in the browser and work offline.',
+  'set.dl.tight': 'There may not be enough space: while a file is being assembled it needs twice its size. Delete unused models first.',
+  'set.dl.queueNote': 'If another download is running, this model is queued and starts right after it.',
+  'set.dl.download': 'Download',
+  'set.dl.anyway': 'Download anyway',
+  'set.dl.present': 'Downloaded',
+  'set.dl.preparing': 'preparing',
+  'set.dl.partial': 'Partially downloaded: {size}. Resume to finish.',
+  'set.dl.kind.asr': 'speech recognition',
+  'set.dl.kind.dia': 'Diarization',
+  'set.dl.kind.llm': 'Local AI',
+  'set.dl.footer':
+    'Deleted models are downloaded again the next time they are used. Cloud services need no models. “Verify” compares file checksums with Hugging Face and re-downloads only the damaged files.',
+
+  'set.ver.btn': 'Verify',
+  'set.ver.title': 'Check file integrity against Hugging Face checksums; damaged files are downloaded again',
+  'set.ver.checking': 'verifying',
+  'set.ver.fetching': 'Requesting reference checksums from Hugging Face…',
+  'set.ver.ok': 'Checked {n} files · all intact',
+  'set.ver.fixed': 'Checked {n} files · repaired {fixed}',
+  'set.ver.none': 'No files in the cache — nothing to check',
+  'set.ver.failed': 'Could not re-download: {files}',
+  'set.ver.error': 'Verification failed: {detail}',
+
+  'set.url.title': 'Your own model by link',
+  'set.url.bad': 'This does not look like a Hugging Face link — see the requirements below.',
+  'set.url.note':
+    'Link requirements: a public Hugging Face repository such as https://huggingface.co/<owner>/<model> (a link to a file page also works). Local recognition needs an ONNX Whisper build from onnx-community, a local LLM needs an ONNX text-generation build. The files are verified by checksum and go into the shared cache.',
+
+  'set.ep.intro':
+    'Connect any service with an OpenAI-format API — OpenRouter, Mistral, Together, Ollama, LM Studio, vLLM, your own server. Enter the address and token, fetch the model list and tick the models you need. Speech models appear in the engine panel, text models in the AI panel.',
+  'set.ep.add': 'Add a service',
+  'set.ep.defaultName': 'Service {n}',
+  'set.ep.name': 'Service name',
+  'set.ep.token': 'API token (leave empty if not required)',
+  'set.ep.proxy': 'Send requests through this app’s server (for services without CORS)',
+  'set.ep.fetch': 'Fetch models',
+  'set.ep.found': 'Models found: {n}',
+  'set.ep.selected': 'selected: {n}',
+  'set.ep.filter': 'Filter models…',
+  'set.ep.kind': 'What the model is used for',
+  'set.ep.kind.asr': 'speech → text',
+  'set.ep.kind.llm': 'text (LLM)',
+  'set.ep.badUrl': 'Enter the full API address, for example https://api.example.com/v1',
+  'set.ep.note':
+    'The address usually ends with /v1. Requests go straight from the browser, so services on localhost work too (Ollama: http://localhost:11434/v1). The token is stored only in this browser.',
+
+  'set.btn.intro':
+    'Buttons of the AI panel: a name, a prompt and a glossary whose terms are added to the prompt. The {glossary} placeholder in a prompt is replaced with the glossary terms; without it the terms are appended to the end.',
+  'set.btn.name': 'Button name',
+  'set.btn.glossary': 'Glossary for this button',
+  'set.btn.noGlossary': 'No glossary',
+  'set.btn.prompt': 'Prompt for the LLM…',
+  'set.btn.add': 'Add a button',
+  'set.btn.reset': 'Reset to built-in',
+  'set.btn.defaultName': 'Button {n}',
+
+  'set.gl.intro':
+    'Glossaries of terms: one term per line. Glossaries ticked in the engine panel are passed to Whisper as a hint (names and terms come out more accurately), and each LLM button can use its own glossary.',
+  'set.gl.send': 'Pass to Whisper',
+  'set.gl.name': 'Glossary name',
+  'set.gl.add': 'Add a glossary',
+  'set.gl.defaultName': 'Glossary {n}',
+
+  // ── custom endpoints ──
+  'ep.err.network':
+    'Could not reach the service. Check the address and that the service allows requests from a browser (CORS); if it does not, enable “through this app’s server”.',
+  'ep.err.proxyNetwork': 'Could not reach the app server.',
+  'ep.err.auth': 'The service rejected the token ({status}). {detail}',
+  'ep.err.http': 'Service error ({status}): {detail}',
+  'ep.err.noModels': 'The service returned an empty model list.',
+
+  // ── errors ──
+  'err.cannotDecode': '“{name}”: the file cannot be decoded in the browser — switch to cloud mode or convert it to wav/mp3',
+  'err.needKey': 'Enter the {provider} API key in the engine panel',
+  'err.key401': 'Invalid API key (401). Check the key in the engine panel.',
+  'err.rate429': 'The service rate limit was exceeded (429). Wait and try again.',
+  'err.tooLarge413': 'The file is too large for the service (413).',
+  'err.service': 'Service error ({status}): {detail}',
+  'err.sizeLimit': 'The file exceeds the limit ({mb} MB). Try local mode — it has no size limit.',
+  'err.modelLoad': 'Could not load the model. {detail}',
+  'err.aiEmpty': 'The AI service returned an empty answer',
+
+  // ── ffmpeg ──
+  'ff.loading': 'Loading the audio converter (ffmpeg.wasm, ~25 MB)…',
+  'ff.converting': 'Converting to PCM audio…',
+  'ff.err.load': 'Could not load ffmpeg.wasm — access to a CDN (jsdelivr or unpkg) is required',
+  'ff.err.read': 'ffmpeg could not read the file',
+
+  // ── footer ──
+  'foot.tagline': 'speech recognition: on device and in the cloud',
+  'foot.engines': 'on device: Whisper + diarization + AI · cloud: OpenAI / Groq / Deepgram / your own API',
+  'foot.credits': 'speakers: pyannote segmentation (MIT) + WeSpeaker ResNet34 (CC-BY-4.0)',
+  'foot.privacy': 'keys, files and history are stored only in this browser',
+}
+
+export default en

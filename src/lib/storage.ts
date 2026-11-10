@@ -1,4 +1,5 @@
 import type { CloudProvider, HistoryItem } from '@/types'
+import { deleteAudio } from './audioStore'
 
 const KEYS = 'steno.keys.v1'
 const HISTORY = 'steno.history.v1'
@@ -32,6 +33,8 @@ export interface AppSettings {
   diarize: boolean
   silenceStop: boolean
   theme: ThemeName
+  /** язык интерфейса (ISO-639-1), по умолчанию английский */
+  uiLang: string
   /** справочники (id), чьи термины улетают в Whisper (initial_prompt) и LLM */
   glossaryIds: string[]
 }
@@ -57,13 +60,15 @@ export interface LlmModelOption {
   id: string
   label: string
   size: string
+  /** ключ i18n с пояснением («быстрая», «точнее»…) */
+  hintKey: string
 }
 
 /** Проверенные ONNX-сборки text-generation под transformers.js. */
 export const LLM_MODELS: LlmModelOption[] = [
-  { id: 'onnx-community/Qwen3-0.6B-ONNX', label: 'Qwen3 0.6B · быстрая', size: '~400 МБ' },
-  { id: 'onnx-community/Qwen3-1.7B-ONNX', label: 'Qwen3 1.7B · точнее', size: '~1.1 ГБ' },
-  { id: 'onnx-community/Qwen3-4B-ONNX', label: 'Qwen3 4B · максимум (WebGPU)', size: '~2.3 ГБ' },
+  { id: 'onnx-community/Qwen3-0.6B-ONNX', label: 'Qwen3 0.6B', size: '~400 MB', hintKey: 'llm.hint.fast' },
+  { id: 'onnx-community/Qwen3-1.7B-ONNX', label: 'Qwen3 1.7B', size: '~1.1 GB', hintKey: 'llm.hint.better' },
+  { id: 'onnx-community/Qwen3-4B-ONNX', label: 'Qwen3 4B', size: '~2.3 GB', hintKey: 'llm.hint.max' },
 ]
 
 const DEFAULTS: AppSettings = {
@@ -75,6 +80,7 @@ const DEFAULTS: AppSettings = {
   diarize: true,
   silenceStop: true,
   theme: 'dark',
+  uiLang: 'en',
   glossaryIds: [],
 }
 
@@ -102,16 +108,27 @@ export function loadHistory(): HistoryItem[] {
   return []
 }
 
+/** Аудио вытесненных из истории записей удаляем — иначе оно копится в IndexedDB без владельца. */
+function dropEvicted(before: HistoryItem[], after: HistoryItem[]) {
+  const kept = new Set(after.map((i) => i.id))
+  for (const i of before) if (!kept.has(i.id) && i.hasAudio) void deleteAudio(i.id)
+}
+
 export function addHistory(item: HistoryItem): HistoryItem[] {
-  const list = [item, ...loadHistory()].slice(0, HISTORY_LIMIT)
+  const all = [item, ...loadHistory()]
+  let list = all.slice(0, HISTORY_LIMIT)
   try {
     localStorage.setItem(HISTORY, JSON.stringify(list))
   } catch {
     // хранилище переполнено — выкидываем половину и пробуем ещё раз
-    const trimmed = list.slice(0, Math.ceil(HISTORY_LIMIT / 2))
-    localStorage.setItem(HISTORY, JSON.stringify(trimmed))
-    return trimmed
+    list = list.slice(0, Math.ceil(HISTORY_LIMIT / 2))
+    try {
+      localStorage.setItem(HISTORY, JSON.stringify(list))
+    } catch {
+      /* совсем нет места — запись останется только в памяти вкладки */
+    }
   }
+  dropEvicted(all, list)
   return list
 }
 

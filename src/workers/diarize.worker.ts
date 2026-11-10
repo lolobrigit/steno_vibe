@@ -5,12 +5,12 @@
 //   2. WeSpeaker ResNet34 (ONNX Runtime Web) — голосовой отпечаток 256-d
 //      на каждую реплику (fbank 80 mel, kaldi-стиль);
 //   3. агломеративная кластеризация по косинусной близости отпечатков —
-//      глобальные «Спикер N» на весь файл.
+//      глобальные спикеры «S1», «S2»… на весь файл (подпись — в i18n).
 
 import { AutoProcessor, AutoModelForAudioFrameClassification, env } from '@huggingface/transformers'
 import * as ort from 'onnxruntime-web'
 import { fbank, l2Normalize, clusterEmbeddings } from '../lib/dsp'
-import { fetchRepoTree, sha256Hex } from '../lib/modelIntegrity'
+import { fetchRepoTree, sha256Hex } from '../lib/hfTree'
 
 env.allowLocalModels = false
 ort.env.wasm.numThreads = 1
@@ -53,8 +53,9 @@ function post(msg: unknown) {
   ;(self as unknown as Worker).postMessage(msg)
 }
 
-function status(text: string) {
-  post({ type: 'status', text })
+/** Код этапа (не текст): интерфейс переводит сам. */
+function status(code: string) {
+  post({ type: 'status', code })
 }
 
 function progress(pct: number) {
@@ -69,7 +70,7 @@ async function loadSegmentation() {
   if (segProcessor && segModel) return
   if (!segLoading) {
     segLoading = (async () => {
-      status('Загрузка модели диаризации (pyannote)…')
+      status('load-seg')
       const progress = (p: { status: string; file?: string; progress?: number }) => {
         if (p.status === 'progress_total') {
           // агрегат по байтам всех файлов pyannote
@@ -183,7 +184,7 @@ async function cachedEmbBytes(cache: Cache): Promise<ArrayBuffer | null> {
 }
 
 async function loadEmbeddingInner() {
-  status('Загрузка модели голосовых отпечатков…')
+  status('load-emb')
 
   let bytes: ArrayBuffer | null = null
   try {
@@ -276,8 +277,7 @@ async function segmentAudio(audio: Float32Array): Promise<Unit[]> {
       if (seg.end - seg.start < 0.05) continue
       units.push({ start: seg.start + base, end: seg.end + base, cls: seg.id })
     }
-    status(`Диаризация: анализ ${Math.round(Math.min(off + WINDOW_SAMPLES, total) / SAMPLE_RATE)} с…`)
-    // фаза сегментации занимает львиную долю времени — шкала 0..70%
+        // фаза сегментации занимает львиную долю времени — шкала 0..70%
     progress((Math.min(off + WINDOW_SAMPLES, total) / total) * 70)
   }
   // склеиваем подряд идущие реплики одного локального класса
@@ -316,15 +316,14 @@ async function diarize(audio: Float32Array): Promise<DiarizedSegment[]> {
   }
   if (units.length === 0) return []
 
-  status('Диаризация: голосовые отпечатки…')
+  status('embed')
   const embeddings: Float32Array[] = []
   for (let i = 0; i < units.length; i++) {
     embeddings.push(await embed(audio, units[i].start, units[i].end))
-    if (i % 8 === 7) status(`Диаризация: отпечатки ${i + 1}/${units.length}…`)
     progress(70 + ((i + 1) / units.length) * 25)
   }
 
-  status('Диаризация: группировка спикеров…')
+  status('cluster')
   progress(97)
   const labels = clusterEmbeddings(embeddings, CLUSTER_THRESHOLD)
 
@@ -334,11 +333,11 @@ async function diarize(audio: Float32Array): Promise<DiarizedSegment[]> {
     durations.set(labels[i], (durations.get(labels[i]) ?? 0) + (u.end - u.start))
   })
   const order = [...durations.entries()].sort((a, b) => b[1] - a[1])
-  const nameOf = new Map(order.map(([cluster], i) => [cluster, `Спикер ${i + 1}`]))
+  const nameOf = new Map(order.map(([cluster], i) => [cluster, `S${i + 1}`]))
 
   const out: DiarizedSegment[] = []
   for (let i = 0; i < units.length; i++) {
-    const speaker = nameOf.get(labels[i]) ?? 'Спикер ?'
+    const speaker = nameOf.get(labels[i]) ?? 'S?'
     const last = out[out.length - 1]
     if (last && last.speaker === speaker && units[i].start - last.end < 0.8) last.end = units[i].end
     else out.push({ start: units[i].start, end: units[i].end, speaker })

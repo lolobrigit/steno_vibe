@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { t } from '@/i18n'
 
-const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|webm|mp4)$/i
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|webm|mp4|mov|mkv|m4v|avi)$/i
 const POLL_MS = 5000
 
 type DirPicker = () => Promise<FileSystemDirectoryHandle>
@@ -46,7 +47,7 @@ export function useFolderWatch(onNewFile: (file: File) => void) {
         }
         setError(null)
       } catch {
-        setError('Доступ к папке потерян — выберите её снова')
+        setError(t('folder.err.lost'))
         stop()
       }
     },
@@ -64,7 +65,7 @@ export function useFolderWatch(onNewFile: (file: File) => void) {
       timerRef.current = window.setInterval(() => void scan(false), POLL_MS)
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
-      setError('Не удалось открыть папку')
+      setError(t('folder.err.open'))
     }
   }, [scan])
 

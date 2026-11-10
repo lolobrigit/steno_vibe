@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,9 +10,26 @@
     />
     <meta
       name="description"
-      content="STENO — транскрипция аудио в текст. Локально в браузере (Whisper, без отправки файлов) или через облачные сервисы OpenAI, Groq и Deepgram."
+      content="Transcribe audio and video to text. Runs locally in the browser with Whisper (files never leave your device) or through OpenAI, Groq, Deepgram and any OpenAI-compatible API. Speaker labels, subtitles, AI summaries."
     />
-    <title>STENO — транскрипция речи: локально и в облаке</title>
+    <title>STENO — speech to text in your browser: local Whisper and cloud</title>
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="STENO" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="STENO" />
+    <meta property="og:title" content="STENO — speech to text in your browser" />
+    <meta
+      property="og:description"
+      content="Local Whisper in the browser or cloud engines. Speaker labels, subtitles, AI summaries. Your files stay on your device."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="STENO — speech to text in your browser" />
+    <meta
+      name="twitter:description"
+      content="Local Whisper in the browser or cloud engines. Speaker labels, subtitles, AI summaries."
+    />
+    <link rel="dns-prefetch" href="https://huggingface.co" />
+    <!-- canonical, hreflang, og:url, JSON-LD: добавляются при сборке плагином stenoSeo (SITE_URL) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,6 +39,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <h1>STENO — speech to text in your browser</h1>
+      <p>
+        Transcribe audio and video locally with Whisper (files never leave your device) or through
+        OpenAI, Groq, Deepgram and any OpenAI-compatible API. Speaker labels, SRT/VTT subtitles and AI
+        summaries. JavaScript is required.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

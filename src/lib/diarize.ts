@@ -1,4 +1,7 @@
 import type { Segment } from '@/types'
+import { startDownload } from './downloads'
+import { abortError } from './gpu'
+import { DIARIZE_JOB_ID, diarizeFiles } from './modelPlan'
 
 export interface DiarizedSegment {
   start: number
@@ -7,19 +10,15 @@ export interface DiarizedSegment {
 }
 
 type WorkerEvent =
-  | { type: 'status'; text: string }
-  | { type: 'load-progress'; file: string; progress: number }
-  | { type: 'load-total'; progress: number }
+  | { type: 'status'; code: string }
   | { type: 'progress'; pct: number }
   | { type: 'ready' }
   | { type: 'result'; segments: DiarizedSegment[] }
   | { type: 'error'; message: string }
 
 export interface DiarizeCallbacks {
-  onStatus?: (text: string) => void
-  onLoadProgress?: (file: string, pct: number) => void
-  /** агрегированный процент скачивания всех файлов (pyannote; WeSpeaker) */
-  onLoadTotal?: (pct: number) => void
+  /** этап: скачивание моделей или анализ аудио */
+  onStage?: (stage: 'download' | 'analyze') => void
   /** процент самой диаризации (анализ окон → отпечатки → кластеризация) */
   onProgress?: (pct: number) => void
 }
@@ -36,38 +35,63 @@ function getWorker(): Worker {
 }
 
 /**
+ * Докачать модели диаризации (pyannote + WeSpeaker, ~45 МБ) менеджером
+ * загрузок. Без сети и без сохранённого списка файлов молча выходим: воркер
+ * возьмёт модели из кэша или скачает сам.
+ */
+export async function ensureDiarizeModels(signal?: AbortSignal): Promise<void> {
+  let files
+  try {
+    files = await diarizeFiles()
+  } catch {
+    return
+  }
+  await startDownload(DIARIZE_JOB_ID, 'pyannote + WeSpeaker', files, { immediate: true, signal })
+}
+
+/**
  * Локальная диаризация: pyannote segmentation + WeSpeaker-эмбеддинги +
  * кластеризация. Всё в браузере, аудио никуда не отправляется.
+ * Отмена (signal) убивает воркер: прервать WASM-инференс иначе нельзя.
  */
-export function diarizeLocal(
+export async function diarizeLocal(
   audio: Float32Array,
   cb: DiarizeCallbacks = {},
+  signal?: AbortSignal,
 ): Promise<DiarizedSegment[]> {
+  cb.onStage?.('download')
+  await ensureDiarizeModels(signal)
+  if (signal?.aborted) throw abortError()
+  cb.onStage?.('analyze')
   const w = getWorker()
-  activeCount++
   return new Promise<DiarizedSegment[]>((resolve, reject) => {
+    const done = () => {
+      w.removeEventListener('message', onMsg)
+      signal?.removeEventListener('abort', onAbort)
+    }
+    const onAbort = () => {
+      done()
+      resetDiarizeWorker()
+      reject(abortError())
+    }
     const onMsg = (ev: MessageEvent<WorkerEvent>) => {
       const m = ev.data
-      if (m.type === 'status') cb.onStatus?.(m.text)
-      if (m.type === 'load-progress') cb.onLoadProgress?.(m.file, m.progress)
-      if (m.type === 'load-total') cb.onLoadTotal?.(m.progress)
       if (m.type === 'progress') cb.onProgress?.(m.pct)
       if (m.type === 'result') {
-        w.removeEventListener('message', onMsg)
+        done()
         resolve(m.segments)
       }
       if (m.type === 'error') {
-        w.removeEventListener('message', onMsg)
+        done()
         // wedged worker не переиспользуем — следующий вызов создаст свежий
         resetDiarizeWorker()
         reject(new Error(m.message))
       }
     }
     w.addEventListener('message', onMsg)
+    signal?.addEventListener('abort', onAbort, { once: true })
     const copy = new Float32Array(audio)
     w.postMessage({ type: 'diarize', audio: copy }, [copy.buffer])
-  }).finally(() => {
-    activeCount = Math.max(0, activeCount - 1)
   })
 }
 
@@ -79,37 +103,6 @@ export function resetDiarizeWorker(): void {
     /* ignore */
   }
   worker = null
-}
-
-/** Пометка загруженности: нужна Home, чтобы не показывать «ГОТОВ», пока диаризация ещё идёт. */
-export function isDiarizeBusy(): boolean {
-  return activeCount > 0
-}
-
-let activeCount = 0
-
-/** Предзагрузка моделей диаризации (pyannote + WeSpeaker) из окна настроек. */
-export function preloadDiarizeModels(cb: DiarizeCallbacks = {}): Promise<void> {
-  const w = getWorker()
-  return new Promise((resolve, reject) => {
-    const onMsg = (ev: MessageEvent<WorkerEvent>) => {
-      const m = ev.data
-      if (m.type === 'status') cb.onStatus?.(m.text)
-      if (m.type === 'load-progress') cb.onLoadProgress?.(m.file, m.progress)
-      if (m.type === 'load-total') cb.onLoadTotal?.(m.progress)
-      if (m.type === 'ready') {
-        w.removeEventListener('message', onMsg)
-        resolve()
-      }
-      if (m.type === 'error') {
-        w.removeEventListener('message', onMsg)
-        resetDiarizeWorker()
-        reject(new Error(m.message))
-      }
-    }
-    w.addEventListener('message', onMsg)
-    w.postMessage({ type: 'load' })
-  })
 }
 
 /**

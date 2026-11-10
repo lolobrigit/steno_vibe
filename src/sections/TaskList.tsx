@@ -1,4 +1,5 @@
-import { AlertTriangle, Check, ListChecks, Loader2 } from 'lucide-react'
+import { AlertTriangle, Ban, Check, ListChecks, Loader2 } from 'lucide-react'
+import { useT } from '@/i18n'
 import type { TaskItem } from '@/lib/tasks'
 
 /**
@@ -6,29 +7,32 @@ import type { TaskItem } from '@/lib/tasks'
  * распознавание речи, диаризация, LLM. pct=null → бегущая полоса.
  */
 export function TaskList({ tasks }: { tasks: TaskItem[] }) {
+  const t = useT()
   if (tasks.length === 0) return null
   return (
-    <div className="flex flex-col gap-2" aria-label="Выполняемые задачи" aria-live="polite">
+    <div className="flex flex-col gap-2" aria-label={t('task.aria')} aria-live="polite">
       <span className="chrome-label !text-[10px] flex items-center gap-1.5">
         <ListChecks className="size-3" aria-hidden="true" />
-        Задачи
+        {t('task.title')}
       </span>
       <ol className="flex flex-col gap-1.5">
-        {tasks.map((t) => (
-          <li key={t.id} className="flex flex-col gap-1">
+        {tasks.map((task) => (
+          <li key={task.id} className="flex flex-col gap-1">
             <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-baseline">
-              {t.state === 'run' ? (
+              {task.state === 'run' ? (
                 <Loader2
                   className="size-3.5 animate-spin self-center"
                   style={{ color: 'hsl(var(--primary))' }}
                   aria-hidden="true"
                 />
-              ) : t.state === 'done' ? (
+              ) : task.state === 'done' ? (
                 <Check
                   className="size-3.5 self-center"
                   style={{ color: 'hsl(var(--ok))' }}
                   aria-hidden="true"
                 />
+              ) : task.state === 'cancelled' ? (
+                <Ban className="size-3.5 self-center text-muted-foreground" aria-hidden="true" />
               ) : (
                 <AlertTriangle
                   className="size-3.5 self-center"
@@ -37,40 +41,44 @@ export function TaskList({ tasks }: { tasks: TaskItem[] }) {
                 />
               )}
               <span className="font-mono text-[11px] text-foreground/90 truncate">
-                {t.label}
-                {t.detail ? (
-                  <span className="text-muted-foreground"> · {t.detail}</span>
+                {task.label}
+                {task.detail ? (
+                  <span className="text-muted-foreground"> · {task.detail}</span>
                 ) : null}
               </span>
               <span
                 className="font-mono text-[11px] tabular-nums"
                 style={{
                   color:
-                    t.state === 'error'
+                    task.state === 'error'
                       ? 'hsl(var(--err))'
-                      : t.state === 'done'
+                      : task.state === 'cancelled'
+                        ? 'hsl(var(--muted-foreground))'
+                        : task.state === 'done'
                         ? 'hsl(var(--ok))'
                         : 'hsl(var(--primary))',
                 }}
               >
-                {t.state === 'error'
-                  ? 'ошибка'
-                  : t.pct === null
-                    ? t.state === 'done'
+                {task.state === 'error'
+                  ? t('task.error')
+                  : task.state === 'cancelled'
+                    ? t('task.cancelled')
+                    : task.pct === null
+                    ? task.state === 'done'
                       ? '100%'
                       : '…'
-                    : `${t.pct}%`}
+                    : `${task.pct}%`}
               </span>
             </div>
             <div
               className="h-1 rounded-sm overflow-hidden"
               style={{ background: 'hsl(var(--track))' }}
               role="progressbar"
-              aria-valuenow={t.pct ?? undefined}
+              aria-valuenow={task.pct ?? undefined}
               aria-valuemin={0}
               aria-valuemax={100}
             >
-              {t.pct === null && t.state === 'run' ? (
+              {task.pct === null && task.state === 'run' ? (
                 <div
                   className="h-full w-1/3 rounded-sm task-bar-slide"
                   style={{ background: 'hsl(var(--primary))' }}
@@ -79,9 +87,15 @@ export function TaskList({ tasks }: { tasks: TaskItem[] }) {
                 <div
                   className="h-full rounded-sm transition-[width] duration-300"
                   style={{
-                    width: `${t.pct ?? 100}%`,
+                    width: `${task.pct ?? 100}%`,
                     background:
-                      t.state === 'error' ? 'hsl(var(--err))' : t.state === 'done' ? 'hsl(var(--ok))' : 'hsl(var(--primary))',
+                      task.state === 'error'
+                        ? 'hsl(var(--err))'
+                        : task.state === 'cancelled'
+                          ? 'hsl(var(--muted-foreground))'
+                          : task.state === 'done'
+                            ? 'hsl(var(--ok))'
+                            : 'hsl(var(--primary))',
                   }}
                 />
               )}

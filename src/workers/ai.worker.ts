@@ -19,21 +19,35 @@ type Generator = (
 ) => Promise<Array<{ generated_text: ChatMessage[] | string }>>
 
 let generator: Generator | null = null
-let loadedModelId: string | null = null
-// параллельные 'load'/'generate' (AI-панель + предзагрузка из настроек)
-// разделяют один процесс загрузки, а не запускают два
+let loadedKey: string | null = null
+// параллельные 'load'/'generate' делят один процесс инициализации
 let genLoading: Promise<Generator> | null = null
 
-async function ensureGenerator(preferWebGPU: boolean, modelId: string): Promise<Generator> {
-  if (generator && loadedModelId === modelId) return generator
-  if (!genLoading) {
-    genLoading = createGenerator(preferWebGPU, modelId).then(({ pipe }) => pipe)
-  }
+interface VariantMsg {
+  modelId?: string
+  device: 'webgpu' | 'wasm'
+  dtype: string
+}
+
+/**
+ * Поднять модель из кэша. Файлы варианта уже скачаны менеджером загрузок в
+ * главном потоке (lib/modelPlan.ts) — здесь только инициализация сессии.
+ */
+async function ensureGenerator(v: VariantMsg): Promise<Generator> {
+  const modelId = v.modelId || DEFAULT_MODEL_ID
+  const key = `${modelId}|${v.device}|${v.dtype}`
+  if (genLoading) await genLoading.catch(() => undefined)
+  if (generator && loadedKey === key) return generator
+  generator = null
+  loadedKey = null
+  genLoading = pipeline('text-generation', modelId, {
+    device: v.device,
+    dtype: v.dtype as never,
+  }) as unknown as Promise<Generator>
   try {
-    const pipe = await genLoading
-    generator = pipe
-    loadedModelId = modelId
-    return pipe
+    generator = await genLoading
+    loadedKey = key
+    return generator
   } finally {
     genLoading = null
   }
@@ -41,42 +55,6 @@ async function ensureGenerator(preferWebGPU: boolean, modelId: string): Promise<
 
 function post(msg: unknown) {
   ;(self as unknown as Worker).postMessage(msg)
-}
-
-async function createGenerator(preferWebGPU: boolean, modelId: string) {
-  const attempts: Array<{ device: 'webgpu' | 'wasm'; dtype: 'q4f16' | 'q4' | 'q8' }> = []
-  if (preferWebGPU) attempts.push({ device: 'webgpu', dtype: 'q4f16' })
-  attempts.push({ device: 'wasm', dtype: 'q4' }, { device: 'wasm', dtype: 'q8' })
-
-  let lastError: unknown = null
-  for (const attempt of attempts) {
-    try {
-      post({
-        type: 'status',
-        text: `Загрузка локальной AI-модели (${attempt.device === 'webgpu' ? 'WebGPU' : 'CPU/WASM'})…`,
-      })
-      const pipe = await pipeline('text-generation', modelId, {
-        device: attempt.device,
-        dtype: attempt.dtype,
-        progress_callback: (p: { status: string; file?: string; progress?: number }) => {
-          if (p.status === 'progress_total') {
-            // агрегат по байтам всех файлов модели
-            post({ type: 'load-total', progress: Math.round(p.progress ?? 0) })
-          } else if (p.status === 'progress' && p.file) {
-            post({
-              type: 'load-progress',
-              file: `ai:${p.file}`,
-              progress: Math.round(p.progress ?? 0),
-            })
-          }
-        },
-      })
-      return { pipe: pipe as unknown as Generator, device: attempt.device }
-    } catch (e) {
-      lastError = e
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error('Не удалось загрузить AI-модель')
 }
 
 /** Qwen3 — reasoning-модель: вырезаем блок размышлений из ответа. */
@@ -88,14 +66,13 @@ function stripThinking(text: string): string {
 
 self.onmessage = async (
   ev: MessageEvent<
-    | { type: 'load'; preferWebGPU: boolean; modelId?: string }
-    | { type: 'generate'; prompt: string; text: string; preferWebGPU: boolean; modelId?: string }
+    | ({ type: 'load' } & VariantMsg)
+    | ({ type: 'generate'; prompt: string; text: string } & VariantMsg)
   >,
 ) => {
   const msg = ev.data
-  const modelId = msg.modelId || DEFAULT_MODEL_ID
   try {
-    const gen = await ensureGenerator(msg.preferWebGPU, modelId)
+    const gen = await ensureGenerator(msg)
     if (msg.type === 'load') {
       post({ type: 'ready' })
       return
@@ -103,10 +80,10 @@ self.onmessage = async (
     const input =
       msg.text.length > MAX_INPUT_CHARS
         ? msg.text.slice(0, MAX_INPUT_CHARS) +
-          '\n\n[…текст обрезан: для локальной модели берётся начало транскрипта…]'
+          '\n\n[…text truncated: the local model only receives the beginning of the transcript…]'
         : msg.text
     const t0 = performance.now()
-    post({ type: 'status', text: 'Локальная модель обрабатывает текст…' })
+    post({ type: 'generating' })
     const MAX_NEW = 1024
     // Процент генерации: TextStreamer с token_callback считает токены.
     // Модель почти всегда останавливается раньше лимита, поэтому шкала
@@ -144,7 +121,7 @@ self.onmessage = async (
       ? (generated[generated.length - 1]?.content ?? '')
       : (generated ?? '')
     const result = stripThinking(raw)
-    if (!result) throw new Error('Модель вернула пустой ответ')
+    if (!result) throw new Error('empty')
     post({ type: 'result', output: result, elapsedSec: (performance.now() - t0) / 1000 })
   } catch (e) {
     post({ type: 'error', message: e instanceof Error ? e.message : String(e) })

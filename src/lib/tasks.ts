@@ -2,7 +2,7 @@
 // диаризация, LLM. Home ведёт список, TaskList рисует, AiPanel пишет
 // свои задачи через тот же TaskApi.
 
-export type TaskState = 'run' | 'done' | 'error'
+export type TaskState = 'run' | 'done' | 'error' | 'cancelled'
 
 export interface TaskItem {
   id: string
@@ -16,10 +16,13 @@ export interface TaskItem {
 
 export interface TaskApi {
   start: (id: string, label: string, detail?: string) => void
-  update: (id: string, patch: Partial<Omit<TaskItem, 'id'>>) => void
+  /** обновляет только выполняющуюся задачу */
+  update: (id: string, patch: Partial<Omit<TaskItem, 'id' | 'state'>>) => void
   done: (id: string, detail?: string) => void
   fail: (id: string, detail?: string) => void
   /** все незавершённые задачи → error (при общем сбое операции) */
   failRunning: () => void
+  /** все незавершённые задачи → cancelled (пользователь нажал «Отмена») */
+  cancelRunning: () => void
   reset: () => void
 }

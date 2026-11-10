@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { t } from '@/i18n'
 
-export type RecordSource = 'mic' | 'tab'
+/**
+ * Источники записи:
+ *   mic    — микрофон (аудио);
+ *   tab    — звук вкладки/экрана + микрофон (аудио);
+ *   screen — видео экрана/вкладки со звуком + микрофон;
+ *   camera — видео с камеры + микрофон.
+ */
+export type RecordSource = 'mic' | 'tab' | 'screen' | 'camera'
+
+export const isVideoSource = (s: RecordSource | null): boolean => s === 'screen' || s === 'camera'
 
 export interface RecorderState {
   recording: boolean
@@ -9,16 +19,27 @@ export interface RecorderState {
   error: string | null
   /** массив уровней 0..1 для живой волны */
   levels: number[]
-  /** при записи вкладки: микрофон подмешан в запись */
+  /** при записи вкладки/экрана: микрофон подмешан в запись */
   micMixed: boolean
+  /** видеопоток для живого превью (только видеозапись) */
+  preview: MediaStream | null
 }
 
 const LEVELS_LEN = 96
 const SILENCE_RMS = 0.012
 const SILENCE_LIMIT_MS = 10000
+const IDLE_LEVELS = new Array(LEVELS_LEN).fill(0.04)
+
+const AUDIO_MIMES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+const VIDEO_MIMES = [
+  'video/webm;codecs=vp9,opus',
+  'video/webm;codecs=vp8,opus',
+  'video/webm',
+  'video/mp4',
+]
 
 export function useRecorder(
-  onStop: (blob: Blob, durationSec: number) => void,
+  onStop: (blob: Blob, durationSec: number, source: RecordSource) => void,
   opts: { silenceStop: boolean },
 ) {
   const [state, setState] = useState<RecorderState>({
@@ -26,8 +47,9 @@ export function useRecorder(
     source: null,
     elapsed: 0,
     error: null,
-    levels: new Array(LEVELS_LEN).fill(0.04),
+    levels: IDLE_LEVELS,
     micMixed: false,
+    preview: null,
   })
 
   const mediaRecorder = useRef<MediaRecorder | null>(null)
@@ -37,16 +59,18 @@ export function useRecorder(
   const timer = useRef<number>(0)
   const chunks = useRef<Blob[]>([])
   const startedAt = useRef(0)
-  const levelsBuf = useRef<number[]>(new Array(LEVELS_LEN).fill(0.04))
+  const levelsBuf = useRef<number[]>(IDLE_LEVELS)
   const silenceMs = useRef(0)
   const lastFrame = useRef(0)
   const optsRef = useRef(opts)
   optsRef.current = opts
+  const onStopRef = useRef(onStop)
+  onStopRef.current = onStop
 
   const cleanup = useCallback(() => {
     cancelAnimationFrame(raf.current)
     window.clearInterval(timer.current)
-    streams.current.forEach((s) => s.getTracks().forEach((t) => t.stop()))
+    streams.current.forEach((s) => s.getTracks().forEach((tr) => tr.stop()))
     streams.current = []
     void audioCtx.current?.close().catch(() => undefined)
     audioCtx.current = null
@@ -55,20 +79,27 @@ export function useRecorder(
 
   useEffect(() => cleanup, [cleanup])
 
-  const stop = useCallback(() => {
-    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
-      mediaRecorder.current.stop()
-    } else {
-      cleanup()
+  const idle = useCallback(
+    () =>
       setState((s) => ({
         ...s,
         recording: false,
         source: null,
         micMixed: false,
-        levels: new Array(LEVELS_LEN).fill(0.04),
-      }))
+        preview: null,
+        levels: IDLE_LEVELS,
+      })),
+    [],
+  )
+
+  const stop = useCallback(() => {
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+      mediaRecorder.current.stop()
+    } else {
+      cleanup()
+      idle()
     }
-  }, [cleanup])
+  }, [cleanup, idle])
   const stopRef = useRef(stop)
   stopRef.current = stop
 
@@ -110,51 +141,60 @@ export function useRecorder(
   const start = useCallback(
     async (source: RecordSource) => {
       setState((s) => ({ ...s, error: null }))
+      if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices) {
+        setState((s) => ({ ...s, error: t('rec.err.unsupported') }))
+        return
+      }
       const ctx = new AudioContext()
       audioCtx.current = ctx
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 1024
+      const micConstraints = { echoCancellation: true, noiseSuppression: true }
 
       try {
         let recordStream: MediaStream
         let micMixed = false
+        let preview: MediaStream | null = null
 
         if (source === 'mic') {
-          const mic = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true },
-          })
+          const mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints })
           streams.current.push(mic)
           ctx.createMediaStreamSource(mic).connect(analyser)
           recordStream = mic
+        } else if (source === 'camera') {
+          const cam = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: micConstraints,
+          })
+          streams.current.push(cam)
+          ctx.createMediaStreamSource(cam).connect(analyser)
+          recordStream = cam
+          preview = new MediaStream(cam.getVideoTracks())
         } else {
           if (!('getDisplayMedia' in navigator.mediaDevices)) {
-            throw new Error('Захват звука вкладки не поддерживается здесь — нужен Chrome или Edge')
+            throw new Error(t('rec.err.noDisplay'))
           }
           const display = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true,
           })
           streams.current.push(display)
-          display.getVideoTracks().forEach((t) => t.stop())
+          const videoTracks = display.getVideoTracks()
           const audioTracks = display.getAudioTracks()
-          if (audioTracks.length === 0) {
-            throw new Error(
-              'Звук не передан: в диалоге выбора вкладки включите «Также поделиться звуком»',
-            )
-          }
           // пользователь остановил демонстрацию → завершаем запись
-          audioTracks[0].addEventListener('ended', () => stopRef.current())
+          ;[...videoTracks, ...audioTracks].forEach((tr) =>
+            tr.addEventListener('ended', () => stopRef.current()),
+          )
 
           const dest = ctx.createMediaStreamDestination()
-          const tabSrc = ctx.createMediaStreamSource(display)
-          tabSrc.connect(dest)
-          tabSrc.connect(analyser)
-
+          if (audioTracks.length > 0) {
+            const tabSrc = ctx.createMediaStreamSource(new MediaStream(audioTracks))
+            tabSrc.connect(dest)
+            tabSrc.connect(analyser)
+          }
           // подмешиваем микрофон, чтобы на встрече слышно было и вас
           try {
-            const mic = await navigator.mediaDevices.getUserMedia({
-              audio: { echoCancellation: true, noiseSuppression: true },
-            })
+            const mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints })
             streams.current.push(mic)
             const micSrc = ctx.createMediaStreamSource(mic)
             micSrc.connect(dest)
@@ -163,15 +203,21 @@ export function useRecorder(
           } catch {
             micMixed = false
           }
-          recordStream = dest.stream
+          if (audioTracks.length === 0 && !micMixed) {
+            throw new Error(t('rec.err.noAudio'))
+          }
+          if (source === 'tab') {
+            // нужен только звук — видеодорожку отпускаем сразу
+            videoTracks.forEach((tr) => tr.stop())
+            recordStream = dest.stream
+          } else {
+            recordStream = new MediaStream([...videoTracks, ...dest.stream.getAudioTracks()])
+            preview = new MediaStream(videoTracks)
+          }
         }
 
-        const mime = [
-          'audio/webm;codecs=opus',
-          'audio/webm',
-          'audio/mp4',
-          'audio/ogg;codecs=opus',
-        ].find((m) => MediaRecorder.isTypeSupported(m))
+        const video = isVideoSource(source)
+        const mime = (video ? VIDEO_MIMES : AUDIO_MIMES).find((m) => MediaRecorder.isTypeSupported(m))
         const rec = new MediaRecorder(recordStream, mime ? { mimeType: mime } : undefined)
         mediaRecorder.current = rec
         chunks.current = []
@@ -180,27 +226,27 @@ export function useRecorder(
         }
         rec.onstop = () => {
           const duration = (Date.now() - startedAt.current) / 1000
-          const blob = new Blob(chunks.current, { type: rec.mimeType || 'audio/webm' })
+          const blob = new Blob(chunks.current, {
+            type: rec.mimeType || (video ? 'video/webm' : 'audio/webm'),
+          })
+          chunks.current = []
           cleanup()
-          setState((s) => ({
-            ...s,
-            recording: false,
-            source: null,
-            micMixed: false,
-            levels: new Array(LEVELS_LEN).fill(0.04),
-          }))
-          if (blob.size > 0) onStop(blob, duration)
+          idle()
+          if (blob.size > 0) onStopRef.current(blob, duration, source)
         }
 
         startedAt.current = Date.now()
-        rec.start(250)
+        // видео отдаём кусками раз в секунду — меньше мелких Blob в памяти
+        rec.start(video ? 1000 : 250)
+        levelsBuf.current = IDLE_LEVELS
         setState({
           recording: true,
           source,
           elapsed: 0,
           error: null,
-          levels: new Array(LEVELS_LEN).fill(0.04),
+          levels: IDLE_LEVELS,
           micMixed,
+          preview,
         })
         timer.current = window.setInterval(
           () => setState((s) => ({ ...s, elapsed: (Date.now() - startedAt.current) / 1000 })),
@@ -210,18 +256,22 @@ export function useRecorder(
       } catch (e) {
         cleanup()
         let msg: string
-        if (e instanceof DOMException && e.name === 'NotAllowedError') {
+        if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
           msg =
-            source === 'tab'
-              ? 'Выбор вкладки отменён или не разрешён.'
-              : 'Нет доступа к микрофону. Разрешите доступ в браузере.'
+            source === 'mic'
+              ? t('rec.err.micDenied')
+              : source === 'camera'
+                ? t('rec.err.camDenied')
+                : t('rec.err.displayDenied')
+        } else if (e instanceof DOMException && e.name === 'NotFoundError') {
+          msg = t(source === 'camera' ? 'rec.err.noCamera' : 'rec.err.noMic')
         } else {
           msg = e instanceof Error ? e.message : String(e)
         }
-        setState((s) => ({ ...s, error: msg }))
+        setState((s) => ({ ...s, error: msg, preview: null }))
       }
     },
-    [cleanup, onStop, tickLevels],
+    [cleanup, idle, tickLevels],
   )
 
   return { ...state, start, stop }
