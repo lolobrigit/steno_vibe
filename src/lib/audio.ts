@@ -1,5 +1,7 @@
 /** Декодирование аудиофайла в моно Float32Array 16 кГц (формат Whisper). */
 
+import { t } from '@/i18n'
+
 export interface DecodedAudio {
   samples: Float32Array
   durationSec: number
@@ -84,10 +86,10 @@ export function encodeWavPcm16(samples: Float32Array, sampleRate = 16000): Blob 
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} Б`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} МБ`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} ГБ`
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
 export function formatTimecode(sec: number, withMs = false): string {
@@ -102,9 +104,11 @@ export function formatTimecode(sec: number, withMs = false): string {
   return withMs ? `${base}.${ms.toString().padStart(3, '0')}` : base
 }
 
+/** «42 s», «5 min 03 s» — единицы на языке интерфейса. */
 export function formatDurationShort(sec: number): string {
-  const m = Math.floor(sec / 60)
-  const s = Math.round(sec % 60)
-  if (m === 0) return `${s} с`
-  return `${m} мин ${s.toString().padStart(2, '0')} с`
+  const total = Math.round(sec)
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  if (m === 0) return `${s} ${t('u.sec')}`
+  return `${m} ${t('u.min')} ${s.toString().padStart(2, '0')} ${t('u.sec')}`
 }

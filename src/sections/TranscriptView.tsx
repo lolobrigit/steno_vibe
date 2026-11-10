@@ -9,6 +9,7 @@ import {
   type PlayerHandle,
 } from '@/lib/player'
 import type { TranscriptResult } from '@/types'
+import { languageName, speakerLabel, useT } from '@/i18n'
 
 type ExportFormat = 'plain' | 'stamped'
 const EXPORT_FMT_KEY = 'steno.export-fmt.v1'
@@ -55,6 +56,7 @@ export function TranscriptView({
   onRenameSpeaker,
   onReassignSegment,
 }: TranscriptViewProps) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   const [exportFmt, setExportFmtState] = useState<ExportFormat>(loadExportFormat)
   const setExportFmt = (f: ExportFormat) => {
@@ -102,14 +104,12 @@ export function TranscriptView({
     const row = el.querySelector<HTMLElement>(`[data-seg="${idx}"]`)
     row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }
-  const lastScrolled = useRef(-1)
-  if (activeIdx >= 0 && activeIdx !== lastScrolled.current) {
-    lastScrolled.current = activeIdx
-    // отложенно, чтобы DOM успел отрисовать подсветку
-    queueMicrotask(() => scrollToIdx(activeIdx))
-  }
+  // после отрисовки подсветки (эффект, а не побочное действие в рендере)
+  useEffect(() => {
+    if (activeIdx >= 0) scrollToIdx(activeIdx)
+  }, [activeIdx])
 
-  const displayName = (sp: string) => speakerNames[sp]?.trim() || sp
+  const displayName = (sp: string) => speakerNames[sp]?.trim() || speakerLabel(sp)
 
   /** Текст для копирования/TXT согласно выбранному формату сохранения. */
   const exportText = () =>
@@ -139,17 +139,20 @@ export function TranscriptView({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 chrome-label !text-[10px]">
         <span>
-          Длительность <b className="text-foreground">{formatDurationShort(result.durationSec)}</b>
+          {t('tv.duration')} <b className="text-foreground">{formatDurationShort(result.durationSec)}</b>
         </span>
         <span>
-          Обработано за <b className="text-foreground">{formatDurationShort(result.elapsedSec)}</b>
+          {t('tv.elapsed')} <b className="text-foreground">{formatDurationShort(result.elapsedSec)}</b>
         </span>
         <span>
-          Слов <b className="text-foreground">{words}</b>
+          {t('tv.words')} <b className="text-foreground">{words}</b>
         </span>
         {result.language && (
           <span>
-            Язык <b className="text-foreground">{result.language}</b>
+            {t('tv.language')}{' '}
+            <b className="text-foreground">
+              {/^[a-z]{2,3}$/.test(result.language) ? languageName(result.language) : result.language}
+            </b>
           </span>
         )}
         <span className="text-[hsl(var(--primary))]">
@@ -170,9 +173,9 @@ export function TranscriptView({
       {speakers.length > 0 && (
         <div className="panel-inset px-3 py-2.5">
           <div className="chrome-label !text-[10px] flex items-center gap-1.5 mb-2">
-            <Users className="size-3.5" aria-hidden="true" /> Спикеры
+            <Users className="size-3.5" aria-hidden="true" /> {t('tv.speakers')}
             <span className="text-muted-foreground/60 normal-case tracking-normal">
-              — клик по имени, чтобы переименовать
+              — {t('tv.renameHint')}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -190,7 +193,7 @@ export function TranscriptView({
                       if (e.key === 'Escape') setEditingSpeaker(null)
                     }}
                     className="h-7 w-32 rounded border border-[hsl(var(--primary)/0.5)] bg-background px-2 text-xs focus:outline-none"
-                    placeholder={sp}
+                    placeholder={speakerLabel(sp)}
                   />
                 ) : (
                   <button
@@ -200,7 +203,7 @@ export function TranscriptView({
                       setEditName(speakerNames[sp] ?? '')
                     }}
                     className="group flex items-center gap-1 rounded-full border border-[hsl(var(--border))] px-2.5 py-1 text-xs hover:border-[hsl(var(--primary)/0.5)] transition-colors"
-                    title="Переименовать спикера"
+                    title={t('tv.rename')}
                   >
                     {displayName(sp)}
                     <Pencil className="size-3 opacity-0 group-hover:opacity-60 transition-opacity" aria-hidden="true" />
@@ -240,7 +243,7 @@ export function TranscriptView({
                       type="button"
                       className="hover:underline disabled:no-underline"
                       disabled={!player}
-                      title={player ? 'Перейти к этому моменту' : undefined}
+                      title={player ? t('tv.jump') : undefined}
                       onClick={() => playerRef.current?.seek(s.start, true)}
                     >
                       {formatTimecode(s.start)}
@@ -253,7 +256,7 @@ export function TranscriptView({
                       <select
                         value={s.speaker}
                         onChange={(e) => onReassignSegment(i, e.target.value)}
-                        title="Переназначить спикера для этой реплики"
+                        title={t('tv.reassign')}
                         className="mt-1 block w-full max-w-[110px] rounded border border-[hsl(var(--border))] bg-background px-1 py-0.5 text-[10px] text-muted-foreground focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
                       >
                         {speakers.map((sp) => (
@@ -269,7 +272,7 @@ export function TranscriptView({
                       'text-[15px] leading-relaxed text-foreground/90 ' +
                       (player ? 'cursor-pointer hover:text-foreground' : '')
                     }
-                    title={player ? 'Клик — перемотать к этой реплике' : undefined}
+                    title={player ? t('tv.jump') : undefined}
                     onClick={() => playerRef.current?.seek(s.start, true)}
                   >
                     {s.text}
@@ -290,12 +293,12 @@ export function TranscriptView({
           <div
             className="flex gap-0.5 p-0.5 panel-inset mr-1"
             role="tablist"
-            aria-label="Формат сохранения текста"
+            aria-label={t('tv.format')}
           >
             {(
               [
-                ['plain', 'Просто текст'],
-                ['stamped', 'Со спикерами и таймкодами'],
+                ['plain', t('tv.plain')],
+                ['stamped', t('tv.stamped')],
               ] as Array<[ExportFormat, string]>
             ).map(([f, label]) => (
               <button
@@ -322,7 +325,7 @@ export function TranscriptView({
           ) : (
             <Copy className="size-4" aria-hidden="true" />
           )}
-          {copied ? 'Скопировано' : 'Копировать'}
+          {copied ? t('common.copied') : t('common.copy')}
         </button>
         <button
           type="button"

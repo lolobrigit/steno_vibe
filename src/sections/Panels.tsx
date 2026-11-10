@@ -8,6 +8,7 @@ import {
   type StoredAudioMeta,
 } from '@/lib/audioStore'
 import type { HistoryItem } from '@/types'
+import { getLanguage, useT } from '@/i18n'
 
 interface HistoryPanelProps {
   items: HistoryItem[]
@@ -16,12 +17,13 @@ interface HistoryPanelProps {
 }
 
 export function HistoryPanel({ items, onOpen, onRemove }: HistoryPanelProps) {
+  const t = useT()
   return (
-    <section className="panel p-4 flex flex-col gap-3" aria-label="История">
-      <h2 className="chrome-label">История · в этом браузере</h2>
+    <section className="panel p-4 flex flex-col gap-3" aria-label={t('hist.title')}>
+      <h2 className="chrome-label">{t('hist.title')}</h2>
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground border border-dashed border-[hsl(var(--border))] rounded px-3 py-4 text-center">
-          Здесь появятся загруженные файлы и транскрипции (хранятся локально)
+          {t('hist.empty')}
         </p>
       ) : (
         <ol className="flex flex-col max-h-72 overflow-y-auto pr-1">
@@ -46,21 +48,21 @@ export function HistoryPanel({ items, onOpen, onRemove }: HistoryPanelProps) {
                   {it.text.slice(0, 90) || it.sourceName}
                 </div>
                 <div className="chrome-label !text-[10px] mt-1 truncate">
-                  {new Date(it.createdAt).toLocaleString('ru-RU', {
+                  {new Date(it.createdAt).toLocaleString(getLanguage(), {
                     day: '2-digit',
                     month: '2-digit',
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
                   {' · '}
-                  {it.modelLabel}
+                  {it.modelLabel || t('hist.uploaded')}
                   {it.durationSec > 0 && <> · {formatDurationShort(it.durationSec)}</>}
                 </div>
               </button>
               <button
                 type="button"
                 onClick={() => onRemove(it.id)}
-                aria-label="Удалить запись"
+                aria-label={t('hist.remove')}
                 className="size-9 shrink-0 inline-flex items-center justify-center text-muted-foreground/60 hover:text-[hsl(var(--err))] cursor-pointer"
               >
                 <Trash2 className="size-4" aria-hidden="true" />
@@ -78,6 +80,7 @@ export function HistoryPanel({ items, onOpen, onRemove }: HistoryPanelProps) {
 export function StoragePanel() {
   const [files, setFiles] = useState<StoredAudioMeta[]>([])
   const [open, setOpen] = useState(false)
+  const t = useT()
 
   const refresh = async () => {
     setFiles(await listAudio())
@@ -96,11 +99,11 @@ export function StoragePanel() {
   const fileBytes = files.reduce((a, f) => a + f.size, 0)
 
   return (
-    <section className="panel p-4 flex flex-col gap-3" aria-label="Локальное хранилище">
+    <section className="panel p-4 flex flex-col gap-3" aria-label={t('stor.aria')}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="chrome-label flex items-center gap-2">
           <HardDrive className="size-3.5" style={{ color: 'hsl(var(--primary))' }} aria-hidden="true" />
-          Файлы · {formatBytes(fileBytes)}
+          {t('stor.files')} · {formatBytes(fileBytes)}
         </h2>
         <button
           type="button"
@@ -108,7 +111,7 @@ export function StoragePanel() {
           aria-expanded={open}
           className="btn-console !min-h-8 px-2 text-muted-foreground hover:text-foreground"
         >
-          {open ? 'скрыть' : 'управление'}
+          {open ? t('stor.hide') : t('stor.manage')}
         </button>
       </div>
 
@@ -117,7 +120,7 @@ export function StoragePanel() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <span className="chrome-label !text-[10px]">
-                Аудиофайлы · {files.length} · {formatBytes(fileBytes)}
+                {t('stor.media')} · {files.length} · {formatBytes(fileBytes)}
               </span>
               {files.length > 0 && (
                 <button
@@ -125,12 +128,12 @@ export function StoragePanel() {
                   onClick={() => void clearAudioStore().then(refresh)}
                   className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:text-[hsl(var(--err))] cursor-pointer min-h-6"
                 >
-                  удалить все
+                  {t('stor.deleteAll')}
                 </button>
               )}
             </div>
             {files.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">Нет сохранённых файлов.</p>
+              <p className="text-[11px] text-muted-foreground">{t('stor.none')}</p>
             ) : (
               <ol className="flex flex-col max-h-36 overflow-y-auto pr-1">
                 {[...files]
@@ -149,7 +152,7 @@ export function StoragePanel() {
                       <button
                         type="button"
                         onClick={() => void deleteAudio(f.id).then(refresh)}
-                        aria-label={`Удалить ${f.name}`}
+                        aria-label={`${t('common.delete')} ${f.name}`}
                         className="size-8 shrink-0 inline-flex items-center justify-center text-muted-foreground/60 hover:text-[hsl(var(--err))] cursor-pointer"
                       >
                         <Trash2 className="size-3.5" aria-hidden="true" />
@@ -159,7 +162,7 @@ export function StoragePanel() {
               </ol>
             )}
             <p className="text-[11px] text-muted-foreground/80 leading-snug">
-              Модели — в окне настроек (иконка шестерёнки в шапке).
+              {t('stor.modelsNote')}
             </p>
           </div>
         </div>

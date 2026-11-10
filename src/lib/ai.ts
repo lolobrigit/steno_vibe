@@ -1,6 +1,8 @@
 // Конфигурация LLM: облачные провайдеры с выбором модели, локальная Qwen.
 // Список моделей можно расширять — это просто записи в массиве.
 
+import { t } from '@/i18n'
+
 export type AiProvider = 'groq' | 'openai'
 
 export interface LlmCloudModel {
@@ -11,14 +13,14 @@ export interface LlmCloudModel {
 
 export const LLM_CLOUD_MODELS: Record<AiProvider, LlmCloudModel[]> = {
   groq: [
-    { id: 'gpt-oss-120b', apiModel: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B · флагман' },
-    { id: 'gpt-oss-20b', apiModel: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B · быстрая' },
+    { id: 'gpt-oss-120b', apiModel: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B' },
+    { id: 'gpt-oss-20b', apiModel: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B' },
     { id: 'llama-4-scout', apiModel: 'meta-llama/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout' },
     { id: 'kimi-k2', apiModel: 'moonshotai/kimi-k2-instruct', label: 'Kimi K2' },
   ],
   openai: [
-    { id: 'gpt-4o-mini', apiModel: 'gpt-4o-mini', label: 'GPT-4o mini · быстрая' },
-    { id: 'gpt-4o', apiModel: 'gpt-4o', label: 'GPT-4o · флагман' },
+    { id: 'gpt-4o-mini', apiModel: 'gpt-4o-mini', label: 'GPT-4o mini' },
+    { id: 'gpt-4o', apiModel: 'gpt-4o', label: 'GPT-4o' },
     { id: 'gpt-4.1', apiModel: 'gpt-4.1', label: 'GPT-4.1' },
     { id: 'gpt-4.1-mini', apiModel: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
   ],
@@ -45,9 +47,9 @@ async function readError(res: Response): Promise<never> {
   } catch {
     detail = res.statusText
   }
-  if (res.status === 401) throw new Error('Неверный API-ключ (401). Проверьте ключ в панели движка.')
-  if (res.status === 429) throw new Error('Лимит запросов AI-сервиса исчерпан (429). Подождите.')
-  throw new Error(`Ошибка AI-сервиса (${res.status}): ${detail}`)
+  if (res.status === 401) throw new Error(t('err.key401'))
+  if (res.status === 429) throw new Error(t('err.rate429'))
+  throw new Error(t('err.service', { status: res.status, detail }))
 }
 
 /** Отправляет транскрипт в LLM через серверный прокси (прямые вызовы из браузера блокируются CORS). */
@@ -57,6 +59,7 @@ export async function runAiPrompt(
   systemPrompt: string,
   text: string,
   modelId?: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   const model = LLM_CLOUD_MODELS[provider].find((m) => m.id === modelId) ?? LLM_CLOUD_MODELS[provider][0]
   const res = await fetch(`${import.meta.env.BASE_URL}api/proxy/ai/${provider}`, {
@@ -66,12 +69,13 @@ export async function runAiPrompt(
       'x-api-key': apiKey,
     },
     body: JSON.stringify({ prompt: systemPrompt, text, model: model.apiModel }),
+    signal,
   })
   if (!res.ok) await readError(res)
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>
   }
   const out = json.choices?.[0]?.message?.content?.trim()
-  if (!out) throw new Error('AI-сервис вернул пустой ответ')
+  if (!out) throw new Error(t('err.aiEmpty'))
   return out
 }

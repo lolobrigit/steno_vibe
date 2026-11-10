@@ -1,15 +1,14 @@
 import type { CloudProvider } from '@/types'
 
+// Тексты (описания, подсказки) живут в словарях i18n: здесь только ключи.
+
 export interface LocalModel {
   id: string
   hfId: string
   label: string
   params: string
   size: string
-  speed: string
   quality: 1 | 2 | 3 | 4 | 5
-  qualityLabel: string
-  bestFor: string
   needsWebGPU?: boolean
 }
 
@@ -20,226 +19,100 @@ export interface CloudModel {
   label: string
   quality: 1 | 2 | 3 | 4 | 5
   price: string
-  note: string
 }
 
 /**
  * Локальные модели Whisper, запускаемые прямо в браузере через
  * transformers.js (ONNX, WebGPU/WASM). Порядок = от быстрой к точной.
+ * Описание: i18n-ключи `lm.<id>.q` (уровень качества) и `lm.<id>.best`.
  */
 export const LOCAL_MODELS: LocalModel[] = [
-  {
-    id: 'tiny',
-    hfId: 'onnx-community/whisper-tiny',
-    label: 'Whisper Tiny',
-    params: '39M',
-    size: '~40 МБ',
-    speed: 'очень быстро',
-    quality: 1,
-    qualityLabel: 'черновая',
-    bestFor: 'Быстрые заметки и черновики на чистой речи. Имена и редкие слова путает.',
-  },
-  {
-    id: 'base',
-    hfId: 'onnx-community/whisper-base',
-    label: 'Whisper Base',
-    params: '74M',
-    size: '~75 МБ',
-    speed: 'быстро',
-    quality: 2,
-    qualityLabel: 'базовая',
-    bestFor: 'Голосовые заметки, диктофон. Для русского всё ещё слабовата.',
-  },
-  {
-    id: 'small',
-    hfId: 'onnx-community/whisper-small',
-    label: 'Whisper Small',
-    params: '244M',
-    size: '~250 МБ',
-    speed: 'средне',
-    quality: 3,
-    qualityLabel: 'хорошая',
-    bestFor: 'Оптимум для браузера: чистая речь, подкасты, лекции без сильного шума.',
-  },
+  { id: 'tiny', hfId: 'onnx-community/whisper-tiny', label: 'Whisper Tiny', params: '39M', size: '~40 MB', quality: 1 },
+  { id: 'base', hfId: 'onnx-community/whisper-base', label: 'Whisper Base', params: '74M', size: '~75 MB', quality: 2 },
+  { id: 'small', hfId: 'onnx-community/whisper-small', label: 'Whisper Small', params: '244M', size: '~250 MB', quality: 3 },
   {
     id: 'large-v3-turbo',
     hfId: 'onnx-community/whisper-large-v3-turbo',
     label: 'Whisper Large v3 Turbo',
     params: '809M',
-    size: '~800 МБ',
-    speed: 'медленно без GPU',
+    size: '~800 MB',
     quality: 4,
-    qualityLabel: 'максимальная локально',
-    bestFor: 'Лучшее качество на устройстве: шум, акценты, музыка. Нужен WebGPU (Chrome/Edge).',
     needsWebGPU: true,
   },
 ]
 
+/** Облачные модели. Пояснение: i18n-ключ `cm.<id>`. */
 export const CLOUD_MODELS: CloudModel[] = [
-  {
-    id: 'groq-turbo',
-    provider: 'groq',
-    apiModel: 'whisper-large-v3-turbo',
-    label: 'Groq · Large v3 Turbo',
-    quality: 4,
-    price: '~$0.04/час',
-    note: 'Лучший баланс: большая модель на быстром железе Groq. Есть бесплатный тариф.',
-  },
-  {
-    id: 'groq-v3',
-    provider: 'groq',
-    apiModel: 'whisper-large-v3',
-    label: 'Groq · Large v3',
-    quality: 5,
-    price: '~$0.111/час',
-    note: 'Максимум качества Whisper, в разы быстрее реального времени.',
-  },
-  {
-    id: 'openai-whisper',
-    provider: 'openai',
-    apiModel: 'whisper-1',
-    label: 'OpenAI · Whisper v2',
-    quality: 4,
-    price: '$0.36/час',
-    note: 'Классический API. Стабильно, поддерживает перевод на английский.',
-  },
-  {
-    id: 'openai-4o',
-    provider: 'openai',
-    apiModel: 'gpt-4o-transcribe',
-    label: 'OpenAI · GPT-4o Transcribe',
-    quality: 5,
-    price: '$0.36/час',
-    note: 'Новая флагманская модель распознавания от OpenAI.',
-  },
-  {
-    id: 'openai-4o-mini',
-    provider: 'openai',
-    apiModel: 'gpt-4o-mini-transcribe',
-    label: 'OpenAI · GPT-4o mini',
-    quality: 3,
-    price: '$0.18/час',
-    note: 'Дешевле и быстрее, качество чуть ниже флагмана.',
-  },
-  {
-    id: 'deepgram-nova3',
-    provider: 'deepgram',
-    apiModel: 'nova-3',
-    label: 'Deepgram · Nova-3',
-    quality: 5,
-    price: '~$0.26/час',
-    note: 'Сильна на деловой речи и телефонии, отдаёт таймкоды по фразам.',
-  },
+  { id: 'groq-turbo', provider: 'groq', apiModel: 'whisper-large-v3-turbo', label: 'Groq · Large v3 Turbo', quality: 4, price: '~$0.04/h' },
+  { id: 'groq-v3', provider: 'groq', apiModel: 'whisper-large-v3', label: 'Groq · Large v3', quality: 5, price: '~$0.111/h' },
+  { id: 'openai-whisper', provider: 'openai', apiModel: 'whisper-1', label: 'OpenAI · Whisper v2', quality: 4, price: '$0.36/h' },
+  { id: 'openai-4o', provider: 'openai', apiModel: 'gpt-4o-transcribe', label: 'OpenAI · GPT-4o Transcribe', quality: 5, price: '$0.36/h' },
+  { id: 'openai-4o-mini', provider: 'openai', apiModel: 'gpt-4o-mini-transcribe', label: 'OpenAI · GPT-4o mini', quality: 3, price: '$0.18/h' },
+  { id: 'deepgram-nova3', provider: 'deepgram', apiModel: 'nova-3', label: 'Deepgram · Nova-3', quality: 5, price: '~$0.26/h' },
 ]
 
 export const PROVIDER_INFO: Record<
   CloudProvider,
-  { label: string; keyUrl: string; keyPlaceholder: string; keyPrefix: string }
+  { label: string; keyUrl: string; keyPlaceholder: string }
 > = {
-  openai: {
-    label: 'OpenAI',
-    keyUrl: 'https://platform.openai.com/api-keys',
-    keyPlaceholder: 'sk-...',
-    keyPrefix: 'sk-',
-  },
-  groq: {
-    label: 'Groq',
-    keyUrl: 'https://console.groq.com/keys',
-    keyPlaceholder: 'gsk_...',
-    keyPrefix: 'gsk_',
-  },
-  deepgram: {
-    label: 'Deepgram',
-    keyUrl: 'https://console.deepgram.com/',
-    keyPlaceholder: 'ключ Deepgram',
-    keyPrefix: '',
-  },
+  openai: { label: 'OpenAI', keyUrl: 'https://platform.openai.com/api-keys', keyPlaceholder: 'sk-...' },
+  groq: { label: 'Groq', keyUrl: 'https://console.groq.com/keys', keyPlaceholder: 'gsk_...' },
+  deepgram: { label: 'Deepgram', keyUrl: 'https://console.deepgram.com/', keyPlaceholder: 'Deepgram key' },
 }
 
-export interface LanguageOption {
-  code: string
-  label: string
-}
-
-export const LANGUAGES: LanguageOption[] = [
-  { code: 'auto', label: 'Автоопределение' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'en', label: 'Английский' },
-  { code: 'uk', label: 'Украинский' },
-  { code: 'de', label: 'Немецкий' },
-  { code: 'es', label: 'Испанский' },
-  { code: 'fr', label: 'Французский' },
-  { code: 'it', label: 'Итальянский' },
-  { code: 'pt', label: 'Португальский' },
-  { code: 'pl', label: 'Польский' },
-  { code: 'tr', label: 'Турецкий' },
-  { code: 'zh', label: 'Китайский' },
-  { code: 'ja', label: 'Японский' },
-  { code: 'ko', label: 'Корейский' },
+/** Языки речи (ISO-639-1). Названия даёт Intl.DisplayNames на языке интерфейса. */
+export const SPEECH_LANGUAGES = [
+  'en', 'es', 'de', 'ja', 'fr', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'id', 'zh',
+  'uk', 'ko', 'ar', 'hi', 'sv', 'cs', 'el', 'he', 'vi', 'th',
 ]
 
 export interface AiAction {
   id: string
-  label: string
+  /** i18n-ключ названия кнопки */
+  labelKey: string
   prompt: string
 }
 
+// Промпты встроенных кнопок — на английском и без привязки к языку: модель
+// отвечает на языке транскрипта. Пользователь может переписать их в настройках.
 export const AI_ACTIONS: AiAction[] = [
   {
     id: 'grammar',
-    label: 'Грамматика',
+    labelKey: 'ai.act.grammar',
     prompt:
-      'Ты — строгий редактор. Исправь орфографию, грамматику и пунктуацию в транскрипте устной речи. Сохрани стиль, порядок мыслей и весь смысл, ничего не добавляй и не сокращай. Верни только исправленный текст, без комментариев.',
+      'You are a strict editor. Fix spelling, grammar and punctuation in this speech transcript. Keep the style, the order of ideas and all of the meaning; add nothing and cut nothing. Answer in the language of the transcript. Return only the corrected text, with no comments.',
   },
   {
     id: 'cleanup',
-    label: 'Чистка речи',
+    labelKey: 'ai.act.cleanup',
     prompt:
-      'Убери из транскрипции слова-паразиты, запинки, междометия и повторы. Сделай текст читабельным, сохранив все факты и порядок изложения. Верни только текст, без комментариев.',
+      'Remove filler words, hesitations, interjections and repetitions from this transcript. Make it readable while keeping every fact and the order of presentation. Answer in the language of the transcript. Return only the text, with no comments.',
   },
   {
     id: 'summary',
-    label: 'Саммари',
+    labelKey: 'ai.act.summary',
     prompt:
-      'Сделай краткое саммари транскрипции: 3–7 маркированных пунктов с главным. Отвечай на языке исходного текста. Верни только список.',
+      'Write a short summary of this transcript: 3–7 bullet points with the main ideas. Answer in the language of the transcript. Return only the list.',
   },
   {
     id: 'fixup',
-    label: 'Корректура терминов',
+    labelKey: 'ai.act.fixup',
     prompt:
-      'В транскрипте встречаются термины, имена и аббревиатуры, искажённые распознаванием по звучанию. Восстанови их по смыслу и контексту — примеры искажений: «X-remote-юзера» → «X-remote-user», «K-Clock-Ice» → «Keycloak», «GVT» → «JWT», «эйчти-тэпэ» → «HTTP». Исправь только явные искажения терминов и имён, остальной текст не трогай, ничего не сокращай и не добавляй. Верни только исправленный текст целиком, без комментариев и списка правок.',
+      'This transcript contains terms, names and abbreviations that speech recognition distorted by sound (for example “K-Clock-Ice” → “Keycloak”, “GVT” → “JWT”). Restore them from meaning and context. Fix only obvious distortions of terms and names, leave the rest of the text untouched, shorten nothing and add nothing. Answer in the language of the transcript. Return only the full corrected text, with no comments and no list of edits.',
   },
   {
     id: 'tasks',
-    label: 'Задачи',
+    labelKey: 'ai.act.tasks',
     prompt:
-      'Выдели из транскрипции все поручения и договорённости. Формат каждого пункта: кто — что сделать — срок (если назван). Если поручений нет, напиши об этом одной строкой. Верни только список.',
+      'Extract all assignments and agreements from this transcript. Format of each item: who — what to do — deadline (if mentioned). If there are none, say so in one line. Answer in the language of the transcript. Return only the list.',
   },
 ]
 
-export const QUALITY_GUIDE = [  {
-    tier: 'Черновик',
-    model: 'Whisper Tiny / Base · локально',
-    text: 'Скорость важнее точности: голосовые заметки, поиск по записи. Ошибки на именах и терминах.',
-  },
-  {
-    tier: 'Рабочее качество',
-    model: 'Whisper Small · локально',
-    text: 'Чистая речь без шума: подкасты, лекции, интервью один-на-один. Приемлемый русский.',
-  },
-  {
-    tier: 'Высокое · локально',
-    model: 'Whisper Large v3 Turbo · WebGPU',
-    text: 'Максимум без отправки файлов: шум, акценты, музыка, многоязычие. Нужен Chrome/Edge с GPU.',
-  },
-  {
-    tier: 'Высокое · облако',
-    model: 'Groq Large v3 Turbo',
-    text: 'То же качество большой модели, но без загрузки 800 МБ и почти мгновенно. Файл уходит в сервис.',
-  },
-  {
-    tier: 'Максимум',
-    model: 'Groq Large v3 · OpenAI GPT-4o · Deepgram Nova-3',
-    text: 'Деловые звонки, телефония, сложная запись. Nova-3 особенно хороша на перебиваниях и телефонном канале.',
-  },
+/** Гайд «модель → качество»: i18n-ключи `guide.<n>.tier` и `guide.<n>.text`. */
+export const QUALITY_GUIDE: Array<{ n: number; model: string }> = [
+  { n: 1, model: 'Whisper Tiny / Base' },
+  { n: 2, model: 'Whisper Small' },
+  { n: 3, model: 'Whisper Large v3 Turbo · WebGPU' },
+  { n: 4, model: 'Groq Large v3 Turbo' },
+  { n: 5, model: 'Groq Large v3 · OpenAI GPT-4o · Deepgram Nova-3' },
 ]

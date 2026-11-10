@@ -4,6 +4,7 @@
 
 import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { toBlobURL } from '@ffmpeg/util'
+import { t } from '@/i18n'
 import { computePeaks, encodeWavPcm16, type DecodedAudio } from './audio'
 
 const CORE_VERSION = '0.12.10'
@@ -23,7 +24,7 @@ async function loadFfmpeg(onStatus?: (t: string) => void): Promise<FFmpeg> {
     let lastErr: unknown = null
     for (const base of CORE_SOURCES) {
       try {
-        onStatus?.('Загрузка конвертера аудио (ffmpeg.wasm, ~25 МБ)…')
+        onStatus?.(t('ff.loading'))
         const [coreURL, wasmURL] = await Promise.all([
           toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
           toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -38,7 +39,7 @@ async function loadFfmpeg(onStatus?: (t: string) => void): Promise<FFmpeg> {
     loading = null
     throw lastErr instanceof Error
       ? lastErr
-      : new Error('Не удалось загрузить ffmpeg.wasm — нужен доступ к CDN (jsdelivr/unpkg)')
+      : new Error(t('ff.err.load'))
   })()
   return loading
 }
@@ -60,7 +61,7 @@ export async function decodeWithFfmpeg(
   }
   try {
     await ff.writeFile(inName, new Uint8Array(await blob.arrayBuffer()))
-    onStatus?.('Конвертация в WAV-совместимый PCM…')
+    onStatus?.(t('ff.converting'))
     ff.on('progress', onFfProgress)
     const code = await ff.exec([
       '-i', inName,
@@ -70,7 +71,7 @@ export async function decodeWithFfmpeg(
       '-acodec', 'pcm_f32le',
       outName,
     ])
-    if (code !== 0) throw new Error('ffmpeg не смог прочитать файл')
+    if (code !== 0) throw new Error(t('ff.err.read'))
     const data = await ff.readFile(outName)
     const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(data as string)
     // выравниваем под Float32 (byteOffset может быть не кратен 4)

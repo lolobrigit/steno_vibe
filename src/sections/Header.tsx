@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CircleHelp, CloudUpload, Moon, Palette, Settings, ShieldCheck, Sun } from 'lucide-react'
 import { QUALITY_GUIDE } from '@/lib/models'
 import type { ThemeName } from '@/lib/storage'
+import { useT } from '@/i18n'
 
 interface HeaderProps {
   status: 'idle' | 'rec' | 'load' | 'proc'
@@ -12,21 +13,18 @@ interface HeaderProps {
   onOpenSettings: () => void
 }
 
-const STATUS: Record<HeaderProps['status'], { label: string; color: string; pulse: boolean }> = {
-  idle: { label: 'ГОТОВ', color: 'hsl(var(--ok))', pulse: false },
-  rec: { label: 'ЗАПИСЬ', color: 'hsl(var(--err))', pulse: true },
-  load: { label: 'ЗАГРУЗКА МОДЕЛИ', color: 'hsl(var(--warn))', pulse: true },
-  proc: { label: 'РАСПОЗНАВАНИЕ', color: 'hsl(var(--primary))', pulse: true },
+const STATUS: Record<HeaderProps['status'], { color: string; pulse: boolean }> = {
+  idle: { color: 'hsl(var(--ok))', pulse: false },
+  rec: { color: 'hsl(var(--err))', pulse: true },
+  load: { color: 'hsl(var(--warn))', pulse: true },
+  proc: { color: 'hsl(var(--primary))', pulse: true },
 }
 
-const THEMES: Array<{ id: ThemeName; label: string }> = [
-  { id: 'dark', label: 'Тёмная' },
-  { id: 'light', label: 'Светлая' },
-  { id: 'neutral', label: 'Нейтральная' },
-]
+const THEMES: ThemeName[] = ['dark', 'light', 'neutral']
 
 export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettings }: HeaderProps) {
   const s = STATUS[status]
+  const t = useT()
   const [guideOpen, setGuideOpen] = useState(false)
 
   return (
@@ -40,12 +38,11 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
           <span className="size-2.5 rounded-full" style={{ backgroundColor: 'hsl(var(--warn))' }} />
           <span className="size-2.5 rounded-full" style={{ backgroundColor: 'hsl(var(--ok))' }} />
         </div>
-        <div className="font-mono font-bold tracking-[0.28em] text-sm text-foreground pl-1">
+        <h1 className="font-mono font-bold tracking-[0.28em] text-sm text-foreground pl-1">
           STENO
-        </div>
-        <div className="hidden md:block chrome-label !text-[10px] opacity-70">
-          РЕЧЬ → ТЕКСТ
-        </div>
+          <span className="sr-only"> — {t('seo.h1')}</span>
+        </h1>
+        <div className="hidden md:block chrome-label !text-[10px] opacity-70">{t('hdr.tagline')}</div>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           {mode === 'local' && deviceLabel && (
@@ -61,18 +58,18 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
               className={`led ${s.pulse ? 'led-pulse' : ''}`}
               style={{ color: s.color, backgroundColor: s.color }}
             />
-            {s.label}
+            {t(`hdr.status.${status}`)}
           </span>
           <span className="hidden lg:inline-flex items-center gap-1.5 text-[11px] font-mono text-muted-foreground">
             {mode === 'local' ? (
               <>
                 <ShieldCheck className="size-3.5" style={{ color: 'hsl(var(--ok))' }} />
-                АУДИО НЕ ПОКИДАЕТ УСТРОЙСТВО
+                {t('hdr.private')}
               </>
             ) : (
               <>
                 <CloudUpload className="size-3.5" style={{ color: 'hsl(var(--warn))' }} />
-                ФАЙЛ ОТПРАВЛЯЕТСЯ В СЕРВИС
+                {t('hdr.uploaded')}
               </>
             )}
           </span>
@@ -85,7 +82,7 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
           >
             <button
               type="button"
-              aria-label="Какую модель выбрать"
+              aria-label={t('hdr.guideAria')}
               aria-expanded={guideOpen}
               onClick={() => setGuideOpen((v) => !v)}
               className="size-9 inline-flex items-center justify-center rounded-[4px] text-muted-foreground hover:text-foreground cursor-pointer"
@@ -95,15 +92,15 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
             {guideOpen && (
               <div className="absolute right-0 top-full pt-2 z-50 w-[min(24rem,calc(100vw-2rem))]">
                 <div className="panel p-4 shadow-xl shadow-black/30">
-                  <h2 className="chrome-label mb-3">Модель → качество</h2>
+                  <h2 className="chrome-label mb-3">{t('hdr.guideTitle')}</h2>
                   <ol className="flex flex-col max-h-[60vh] overflow-y-auto pr-1">
                     {QUALITY_GUIDE.map((g, i) => (
                       <li
-                        key={g.tier}
+                        key={g.n}
                         className={`py-2.5 ${i > 0 ? 'border-t border-[hsl(var(--border))]' : ''}`}
                       >
                         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                          <span className="text-[13px] font-semibold text-foreground">{g.tier}</span>
+                          <span className="text-[13px] font-semibold text-foreground">{t(`guide.${g.n}.tier`)}</span>
                           <span
                             className="font-mono text-[11px]"
                             style={{ color: 'hsl(var(--primary))' }}
@@ -112,7 +109,7 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
                           </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                          {g.text}
+                          {t(`guide.${g.n}.text`)}
                         </p>
                       </li>
                     ))}
@@ -126,8 +123,8 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
           <button
             type="button"
             onClick={onOpenSettings}
-            aria-label="Настройки и модели"
-            title="Настройки и модели"
+            aria-label={t('hdr.settings')}
+            title={t('hdr.settings')}
             className="size-9 inline-flex items-center justify-center rounded-[4px] text-muted-foreground hover:text-foreground cursor-pointer"
           >
             <Settings className="size-4.5" aria-hidden="true" />
@@ -137,24 +134,24 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
           <div
             className="flex gap-0.5 p-0.5 panel-inset"
             role="group"
-            aria-label="Тема оформления"
+            aria-label={t('hdr.theme')}
           >
-            {THEMES.map((t) => (
+            {THEMES.map((id) => (
               <button
-                key={t.id}
+                key={id}
                 type="button"
-                onClick={() => onTheme(t.id)}
-                aria-pressed={theme === t.id}
-                title={t.label}
+                onClick={() => onTheme(id)}
+                aria-pressed={theme === id}
+                title={t(`hdr.theme.${id}`)}
                 className={`size-8 inline-flex items-center justify-center rounded-[3px] cursor-pointer transition-colors ${
-                  theme === t.id
+                  theme === id
                     ? 'text-foreground bg-[hsl(var(--accent))]'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {t.id === 'dark' ? (
+                {id === 'dark' ? (
                   <Moon className="size-3.5" aria-hidden="true" />
-                ) : t.id === 'light' ? (
+                ) : id === 'light' ? (
                   <Sun className="size-3.5" aria-hidden="true" />
                 ) : (
                   <Palette className="size-3.5" aria-hidden="true" />

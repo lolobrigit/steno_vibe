@@ -6,6 +6,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { Pause, Play } from 'lucide-react'
 import { formatTimecode } from '@/lib/audio'
 import type { Segment } from '@/types'
+import { useT } from '@/i18n'
 
 export type MediaKind = 'audio' | 'video'
 
@@ -36,6 +37,7 @@ function SeekBar({
   duration: number
   onSeek: (sec: number) => void
 }) {
+  const t = useT()
   const barRef = useRef<HTMLDivElement | null>(null)
   const seekFromEvent = (clientX: number) => {
     const bar = barRef.current
@@ -49,7 +51,7 @@ function SeekBar({
     <div
       ref={barRef}
       role="slider"
-      aria-label="Перемотка"
+      aria-label={t('pl.seek')}
       aria-valuemin={0}
       aria-valuemax={Math.round(duration)}
       aria-valuenow={Math.round(time)}
@@ -60,7 +62,7 @@ function SeekBar({
         if (e.key === 'ArrowLeft') onSeek(Math.max(0, time - 5))
       }}
       className="group flex-1 h-4 flex items-center cursor-pointer"
-      title="Клик — перемотка, ←/→ — ±5 сек"
+      title={t('pl.seekHint')}
     >
       <div
         className="relative w-full h-1 group-hover:h-1.5 rounded-sm transition-all"
@@ -93,6 +95,7 @@ export const MediaPlayerBar = forwardRef<
     onState: (s: PlayerState) => void
   }
 >(function MediaPlayerBar({ url, kind, fallbackDuration, onState }, ref) {
+  const t = useT()
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -177,7 +180,7 @@ export const MediaPlayerBar = forwardRef<
             if (el.paused) void el.play().catch(() => {})
             else el.pause()
           }}
-          aria-label={playing ? 'Пауза' : 'Слушать'}
+          aria-label={playing ? t('pl.pause') : t('pl.play')}
           className="btn-console !min-h-9 !min-w-9 inline-flex items-center justify-center border border-[hsl(var(--primary)/0.5)]"
           style={{ color: 'hsl(var(--primary))' }}
         >

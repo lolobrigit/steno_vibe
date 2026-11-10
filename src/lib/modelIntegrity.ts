@@ -6,15 +6,24 @@
 // Мы хэшируем то, что лежит в Cache API браузера, и сравниваем с эталоном.
 // Несовпадающие файлы удаляем и докачиваем напрямую — остальные не трогаем.
 
-const HF_HOSTS = ['https://huggingface.co', 'https://hf-mirror.com']
+import { startDownload, type FileSpec } from './downloads'
+import { sha256Blob } from './sha256'
 
-export interface TreeEntry {
-  path: string
-  size: number
-  /** SHA-256 содержимого (LFS) */
-  sha256?: string
-  /** git blob SHA-1 (обычные файлы) */
-  sha1?: string
+import { fetchRepoTree, gitBlobSha1Hex, HF_HOSTS, type TreeEntry } from './hfTree'
+
+export { fetchRepoTree, HF_HOSTS, type TreeEntry }
+export const TRANSFORMERS_CACHE = 'transformers-cache'
+
+/** Описание файла репозитория для менеджера загрузок (ключ кэша = URL resolve/main). */
+export function hfFileSpec(repoId: string, entry: TreeEntry, cacheName = TRANSFORMERS_CACHE): FileSpec {
+  return {
+    url: `${HF_HOSTS[0]}/${repoId}/resolve/main/${entry.path}`,
+    mirror: `${HF_HOSTS[1]}/${repoId}/resolve/main/${entry.path}`,
+    cacheName,
+    path: entry.path,
+    size: entry.size,
+    sha256: entry.sha256,
+  }
 }
 
 export interface VerifyIssue {
@@ -33,64 +42,6 @@ export interface VerifyReport {
   corrupt: VerifyIssue[]
   /** файлы, которых нет в дереве HF (другая ревизия/переименованы) — пропускаем */
   unknown: string[]
-}
-
-function toHex(buf: ArrayBuffer): string {
-  const b = new Uint8Array(buf)
-  let s = ''
-  for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, '0')
-  return s
-}
-
-export async function sha256Hex(data: ArrayBuffer): Promise<string> {
-  return toHex(await crypto.subtle.digest('SHA-256', data))
-}
-
-/** git blob hash: sha1("blob <len>\0" + content) — так HF считает oid мелких файлов. */
-export async function gitBlobSha1Hex(data: ArrayBuffer): Promise<string> {
-  const head = new TextEncoder().encode(`blob ${data.byteLength}\0`)
-  const joined = new Uint8Array(head.length + data.byteLength)
-  joined.set(head, 0)
-  joined.set(new Uint8Array(data), head.length)
-  return toHex(await crypto.subtle.digest('SHA-1', joined.buffer))
-}
-
-interface TreeApiItem {
-  type: string
-  path: string
-  size?: number
-  oid?: string
-  lfs?: { oid?: string; size?: number }
-}
-
-/** Дерево файлов репозитория с хэшами. HF → зеркало, если основной недоступен. */
-export async function fetchRepoTree(
-  repoId: string,
-  revision = 'main',
-): Promise<Map<string, TreeEntry>> {
-  let lastErr: unknown = null
-  for (const host of HF_HOSTS) {
-    try {
-      const url = `${host}/api/models/${repoId}/tree/${revision}?recursive=true`
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const items = (await res.json()) as TreeApiItem[]
-      const map = new Map<string, TreeEntry>()
-      for (const it of items) {
-        if (it.type !== 'file') continue
-        map.set(it.path, {
-          path: it.path,
-          size: it.lfs?.size ?? it.size ?? 0,
-          sha256: it.lfs?.oid,
-          sha1: it.lfs?.oid ? undefined : it.oid,
-        })
-      }
-      return map
-    } catch (e) {
-      lastErr = e
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error('Не удалось получить дерево файлов')
 }
 
 /** Все записи всех кэшей, относящиеся к репозиторию: url + путь файла в репо. */
@@ -144,11 +95,14 @@ export async function verifyRepoCache(
         done++
         continue
       }
-      const buf = await res.arrayBuffer()
-      if (expected.size > 0 && buf.byteLength !== expected.size) {
+      // большие LFS-файлы хэшируем потоково — без загрузки 1+ ГБ в память вкладки
+      const blob = await res.blob()
+      if (expected.size > 0 && blob.size !== expected.size) {
         report.corrupt.push({ file: e.file, url: e.url, cacheName: e.cacheName, reason: 'size-mismatch' })
       } else {
-        const hex = expected.sha256 ? await sha256Hex(buf) : await gitBlobSha1Hex(buf)
+        const hex = expected.sha256
+          ? await sha256Blob(blob)
+          : await gitBlobSha1Hex(await blob.arrayBuffer())
         const want = (expected.sha256 ?? expected.sha1)!.toLowerCase()
         if (hex === want) report.ok++
         else report.corrupt.push({ file: e.file, url: e.url, cacheName: e.cacheName, reason: 'corrupt' })
@@ -164,8 +118,8 @@ export async function verifyRepoCache(
 }
 
 /**
- * Докачивает ТОЛЬКО переданные (битые) файлы: скачивает заново,
- * проверяет хэш и кладёт в кэш под тем же URL. Возвращает число исправленных.
+ * Перекачивает ТОЛЬКО переданные (битые) файлы через менеджер загрузок:
+ * запись удаляется из кэша и скачивается заново с проверкой хэша.
  */
 export async function repairFiles(
   repoId: string,
@@ -181,20 +135,15 @@ export async function repairFiles(
     onProgress?.(issue.file, done, issues.length)
     const expected = tree.get(issue.file)
     try {
-      // cache:'reload' — не отдавать тот же битый ответ из HTTP-кэша браузера
-      const res = await fetch(issue.url, { cache: 'reload' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const buf = await res.arrayBuffer()
-      if (expected) {
-        const hex = expected.sha256 ? await sha256Hex(buf) : await gitBlobSha1Hex(buf)
-        const want = (expected.sha256 ?? expected.sha1 ?? '').toLowerCase()
-        if (want && hex !== want) throw new Error('хэш не сошёлся после повторной загрузки')
+      await (await caches.open(issue.cacheName)).delete(issue.url)
+      const spec: FileSpec = {
+        url: issue.url,
+        cacheName: issue.cacheName,
+        path: issue.file,
+        size: expected?.size ?? 0,
+        sha256: expected?.sha256,
       }
-      const cache = await caches.open(issue.cacheName)
-      await cache.put(
-        issue.url,
-        new Response(buf, { headers: { 'Content-Length': String(buf.byteLength) } }),
-      )
+      await startDownload(`repair:${issue.url}`, issue.file, [spec], { immediate: true })
       fixed++
     } catch {
       failed.push(issue.file)
@@ -218,8 +167,6 @@ export async function verifyAndRepairRepo(
   return { checked: report.checked, ok: report.ok, fixed: rep.fixed, failed: rep.failed }
 }
 
-const DOWNLOAD_CACHE = 'transformers-cache'
-
 /** Вытаскивает repoId из ссылки: huggingface.co/owner/repo, hf-mirror, /tree/…, /resolve/… */
 export function parseRepoUrl(input: string): string | null {
   const m = input
@@ -228,64 +175,8 @@ export function parseRepoUrl(input: string): string | null {
   return m ? m[1] : null
 }
 
-/**
- * Скачивает ВСЕ файлы репозитория в кэш transformers.js (URL-ключи resolve/main).
- * Каждый файл проверяется по эталонному хэшу HF — битый не попадёт в кэш.
- * Уже скачанные целые файлы пропускаются (докачка после обрыва).
- */
-export async function downloadRepo(
-  repoId: string,
-  onProgress?: (file: string, pct: number) => void,
-): Promise<{ downloaded: number; skipped: number; failed: string[] }> {
+/** Все файлы репозитория как набор для менеджера загрузок («своя модель по ссылке»). */
+export async function repoFileSpecs(repoId: string): Promise<FileSpec[]> {
   const tree = await fetchRepoTree(repoId)
-  const files = [...tree.values()].filter((f) => !f.path.startsWith('.'))
-  const totalBytes = files.reduce((a, f) => a + f.size, 0)
-  let doneBytes = 0
-  let downloaded = 0
-  let skipped = 0
-  const failed: string[] = []
-  const cache = await caches.open(DOWNLOAD_CACHE)
-
-  for (const f of files) {
-    onProgress?.(f.path, totalBytes > 0 ? Math.round((doneBytes / totalBytes) * 100) : 0)
-    const url = `${HF_HOSTS[0]}/${repoId}/resolve/main/${f.path}`
-    try {
-      const existing = await cache.match(url)
-      if (existing) {
-        const buf = await existing.arrayBuffer()
-        const hex = f.sha256 ? await sha256Hex(buf) : await gitBlobSha1Hex(buf)
-        if (hex === (f.sha256 ?? f.sha1 ?? '').toLowerCase()) {
-          skipped++
-          doneBytes += f.size
-          continue
-        }
-        await cache.delete(url) // битый — перекачаем
-      }
-      let buf: ArrayBuffer | null = null
-      for (const host of HF_HOSTS) {
-        try {
-          const res = await fetch(`${host}/${repoId}/resolve/main/${f.path}`, { cache: 'reload' })
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          buf = await res.arrayBuffer()
-          break
-        } catch {
-          buf = null
-        }
-      }
-      if (!buf) throw new Error('не скачался')
-      const hex = f.sha256 ? await sha256Hex(buf) : await gitBlobSha1Hex(buf)
-      const want = (f.sha256 ?? f.sha1 ?? '').toLowerCase()
-      if (want && hex !== want) throw new Error('хэш не сошёлся')
-      await cache.put(
-        url,
-        new Response(buf, { headers: { 'Content-Length': String(buf.byteLength) } }),
-      )
-      downloaded++
-    } catch {
-      failed.push(f.path)
-    }
-    doneBytes += f.size
-    onProgress?.(f.path, totalBytes > 0 ? Math.round((doneBytes / totalBytes) * 100) : 100)
-  }
-  return { downloaded, skipped, failed }
+  return [...tree.values()].filter((f) => !f.path.startsWith('.')).map((f) => hfFileSpec(repoId, f))
 }

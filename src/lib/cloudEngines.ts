@@ -1,4 +1,5 @@
 import type { CloudProvider, Segment } from '@/types'
+import { t } from '@/i18n'
 
 interface CloudResult {
   text: string
@@ -17,6 +18,8 @@ interface CloudOptions {
   diarize?: boolean // разделение спикеров (Deepgram)
   /** справочник терминов → prompt (OpenAI/Groq) / keyterm (Deepgram) */
   prompt?: string
+  /** отмена запроса */
+  signal?: AbortSignal
 }
 
 /**
@@ -40,10 +43,10 @@ async function readError(res: Response): Promise<never> {
   } catch {
     detail = res.statusText
   }
-  if (res.status === 401) throw new Error('Неверный API-ключ (401). Проверьте ключ в панели движка.')
-  if (res.status === 429) throw new Error('Превышен лимит запросов сервиса (429). Подождите и повторите.')
-  if (res.status === 413) throw new Error(detail || 'Файл слишком большой (413).')
-  throw new Error(`Ошибка сервиса (${res.status}): ${detail}`)
+  if (res.status === 401) throw new Error(t('err.key401'))
+  if (res.status === 429) throw new Error(t('err.rate429'))
+  if (res.status === 413) throw new Error(t('err.tooLarge413'))
+  throw new Error(t('err.service', { status: res.status, detail }))
 }
 
 interface VerboseJson {
@@ -85,7 +88,7 @@ function normalizeDeepgram(json: DeepgramResponse): CloudResult {
         start: s.start,
         end: s.end,
         text: s.text.trim(),
-        speaker: typeof p.speaker === 'number' ? `Спикер ${p.speaker + 1}` : undefined,
+        speaker: typeof p.speaker === 'number' ? `S${p.speaker + 1}` : undefined,
       })),
     )
     .filter((s) => s.text.length > 0)
@@ -99,8 +102,7 @@ function normalizeDeepgram(json: DeepgramResponse): CloudResult {
 export async function transcribeCloud(opts: CloudOptions): Promise<CloudResult> {
   if (opts.file.size > cloudSizeLimit(opts.provider)) {
     throw new Error(
-      `Файл больше лимита (${Math.round(cloudSizeLimit(opts.provider) / 1024 / 1024)} МБ). ` +
-        'Попробуйте локальный режим — у него нет лимита размера.',
+      t('err.sizeLimit', { mb: Math.round(cloudSizeLimit(opts.provider) / 1024 / 1024) }),
     )
   }
 
@@ -120,6 +122,7 @@ export async function transcribeCloud(opts: CloudOptions): Promise<CloudResult> 
         'Content-Type': opts.file.type || 'application/octet-stream',
       },
       body: opts.file,
+      signal: opts.signal,
     },
   )
   if (!res.ok) await readError(res)

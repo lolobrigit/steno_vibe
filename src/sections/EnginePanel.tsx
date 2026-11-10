@@ -1,28 +1,28 @@
 import { useState } from 'react'
-import { Cpu, Cloud, ExternalLink, Eye, EyeOff, Users, BookMarked } from 'lucide-react'
-import {
-  CLOUD_MODELS,
-  LANGUAGES,
-  LOCAL_MODELS,
-  PROVIDER_INFO,
-} from '@/lib/models'
+import { Cpu, Cloud, ExternalLink, Eye, EyeOff, Plug, Users, BookMarked } from 'lucide-react'
+import { CLOUD_MODELS, LOCAL_MODELS, PROVIDER_INFO, SPEECH_LANGUAGES } from '@/lib/models'
+import { customModelRef, parseCustomRef, type CustomEndpoint } from '@/lib/customEndpoints'
+import { languageName, useT } from '@/i18n'
 import type { CloudProvider } from '@/types'
 import type { ApiKeys, AppSettings, Glossary } from '@/lib/storage'
 
 interface EnginePanelProps {
   settings: AppSettings
   keys: ApiKeys
+  /** свои OpenAI-совместимые сервисы (настраиваются в окне настроек) */
+  endpoints: CustomEndpoint[]
   hasWebGPU: boolean
   decodeFailed: boolean
   busy: boolean
   glossaries: Glossary[]
   onSettings: (s: AppSettings) => void
   onKeys: (k: ApiKeys) => void
+  onOpenSettings: () => void
 }
 
-function QualityDots({ n }: { n: number }) {
+function QualityDots({ n, label }: { n: number; label: string }) {
   return (
-    <span className="inline-flex gap-0.5" aria-label={`качество ${n} из 5`}>
+    <span className="inline-flex gap-0.5" aria-label={label}>
       {Array.from({ length: 5 }, (_, i) => (
         <span
           key={i}
@@ -37,6 +37,7 @@ function QualityDots({ n }: { n: number }) {
 
 export function EnginePanel(p: EnginePanelProps) {
   const { settings, keys } = p
+  const t = useT()
   const [showKeys, setShowKeys] = useState(false)
 
   const set = <K extends keyof AppSettings>(k: K, v: AppSettings[K]) =>
@@ -47,13 +48,16 @@ export function EnginePanel(p: EnginePanelProps) {
   const info = PROVIDER_INFO[provider]
   const localModel = LOCAL_MODELS.find((m) => m.id === settings.localModel) ?? LOCAL_MODELS[0]
 
-  const translateSupported = settings.mode === 'local' || provider !== 'deepgram'
+  const custom = parseCustomRef(settings.cloudModel, p.endpoints)
+  const asrEndpoints = p.endpoints.filter((e) => e.models.some((m) => m.kind === 'asr'))
+  const serviceDiarize = settings.mode === 'cloud' && !custom && provider === 'deepgram'
+  const translateSupported = !serviceDiarize
 
   return (
-    <section className="panel p-4 flex flex-col gap-4" aria-label="Движок распознавания">
-      <h2 className="chrome-label">02 · Движок</h2>
+    <section className="panel p-4 flex flex-col gap-4" aria-label={t('eng.aria')}>
+      <h2 className="chrome-label">02 · {t('eng.title')}</h2>
 
-      <div className="grid grid-cols-2 gap-1 p-1 panel-inset" role="tablist" aria-label="Режим">
+      <div className="grid grid-cols-2 gap-1 p-1 panel-inset" role="tablist" aria-label={t('eng.mode')}>
         <button
           type="button"
           role="tab"
@@ -66,7 +70,7 @@ export function EnginePanel(p: EnginePanelProps) {
           }`}
         >
           <Cpu className="size-4" aria-hidden="true" />
-          Локально
+          {t('eng.local')}
         </button>
         <button
           type="button"
@@ -80,7 +84,7 @@ export function EnginePanel(p: EnginePanelProps) {
           }`}
         >
           <Cloud className="size-4" aria-hidden="true" />
-          Сервисы
+          {t('eng.cloud')}
         </button>
       </div>
 
@@ -88,12 +92,11 @@ export function EnginePanel(p: EnginePanelProps) {
         <>
           {p.decodeFailed && (
             <p className="text-xs text-[hsl(var(--err))] border-l-2 border-[hsl(var(--err))] bg-[hsl(var(--err)/0.08)] px-3 py-2">
-              Этот файл браузер не смог декодировать — локальный режим недоступен.
-              Переключитесь на «Сервисы» или конвертируйте файл в wav/mp3.
+              {t('eng.decodeFailed')}
             </p>
           )}
           <label className="flex flex-col gap-1.5">
-            <span className="chrome-label !text-[10px]">Модель Whisper (на устройстве)</span>
+            <span className="chrome-label !text-[10px]">{t('eng.localModel')}</span>
             <select
               value={settings.localModel}
               disabled={p.busy}
@@ -110,20 +113,19 @@ export function EnginePanel(p: EnginePanelProps) {
           <div className="panel-inset px-3 py-2.5 text-xs flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <span className="chrome-label !text-[10px]">
-                {localModel.params} параметров · {localModel.qualityLabel}
+                {localModel.params} · {t(`lm.${localModel.id}.q`)}
               </span>
-              <QualityDots n={localModel.quality} />
+              <QualityDots n={localModel.quality} label={t('eng.quality', { n: localModel.quality })} />
             </div>
-            <p className="text-muted-foreground leading-relaxed">{localModel.bestFor}</p>
+            <p className="text-muted-foreground leading-relaxed">{t(`lm.${localModel.id}.best`)}</p>
             {localModel.needsWebGPU && !p.hasWebGPU && (
               <p className="text-[hsl(var(--warn))]">
-                WebGPU недоступен — эта модель будет очень медленной. Откройте Chrome/Edge
-                или выберите Small.
+                {t('eng.noGpuHeavy')}
               </p>
             )}
             {!p.hasWebGPU && !localModel.needsWebGPU && (
               <p className="text-muted-foreground/80">
-                WebGPU не обнаружен — пойдёт через CPU (WASM), медленнее.
+                {t('eng.noGpu')}
               </p>
             )}
           </div>
@@ -131,7 +133,7 @@ export function EnginePanel(p: EnginePanelProps) {
       ) : (
         <>
           <label className="flex flex-col gap-1.5">
-            <span className="chrome-label !text-[10px]">Сервис и модель</span>
+            <span className="chrome-label !text-[10px]">{t('eng.cloudModel')}</span>
             <select
               value={settings.cloudModel}
               disabled={p.busy}
@@ -143,26 +145,59 @@ export function EnginePanel(p: EnginePanelProps) {
                   {m.label}
                 </option>
               ))}
+              {asrEndpoints.map((e) => (
+                <optgroup key={e.id} label={e.name}>
+                  {e.models
+                    .filter((m) => m.kind === 'asr')
+                    .map((m) => (
+                      <option
+                        key={m.id}
+                        value={customModelRef(e.id, m.id)}
+                        className="bg-[hsl(var(--popover))]"
+                      >
+                        {m.id}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
             </select>
           </label>
-          <div className="panel-inset px-3 py-2.5 text-xs flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <span className="chrome-label !text-[10px]">{cloudModel.price}</span>
-              <QualityDots n={cloudModel.quality} />
+          {custom ? (
+            <div className="panel-inset px-3 py-2.5 text-xs flex flex-col gap-1.5">
+              <span className="chrome-label !text-[10px] truncate" title={custom.endpoint.baseUrl}>
+                {custom.endpoint.baseUrl}
+              </span>
+              <p className="text-muted-foreground leading-relaxed">{t('eng.customNote')}</p>
             </div>
-            <p className="text-muted-foreground leading-relaxed">{cloudModel.note}</p>
-          </div>
+          ) : (
+            <div className="panel-inset px-3 py-2.5 text-xs flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="chrome-label !text-[10px]">{cloudModel.price}</span>
+                <QualityDots n={cloudModel.quality} label={t('eng.quality', { n: cloudModel.quality })} />
+              </div>
+              <p className="text-muted-foreground leading-relaxed">{t(`cm.${cloudModel.id}`)}</p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={p.onOpenSettings}
+            className="btn-console !min-h-8 px-2.5 !text-[10px] border border-[hsl(var(--border))] text-muted-foreground hover:text-foreground self-start"
+          >
+            <Plug className="size-3.5" aria-hidden="true" />
+            {t('eng.addEndpoint')}
+          </button>
 
+          {!custom && (
           <label className="flex flex-col gap-1.5">
             <span className="chrome-label !text-[10px] flex items-center justify-between">
-              API-ключ {info.label}
+              {t('eng.apiKey', { provider: info.label })}
               <a
                 href={info.keyUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-[hsl(var(--primary))] hover:underline normal-case tracking-normal"
               >
-                получить <ExternalLink className="size-3" aria-hidden="true" />
+                {t('eng.getKey')} <ExternalLink className="size-3" aria-hidden="true" />
               </a>
             </span>
             <div className="relative">
@@ -178,13 +213,14 @@ export function EnginePanel(p: EnginePanelProps) {
               <button
                 type="button"
                 onClick={() => setShowKeys((v) => !v)}
-                aria-label={showKeys ? 'Скрыть ключ' : 'Показать ключ'}
+                aria-label={showKeys ? t('eng.hideKey') : t('eng.showKey')}
                 className="absolute right-1 top-1/2 -translate-y-1/2 size-9 inline-flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 {showKeys ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
             </div>
           </label>
+          )}
         </>
       )}
 
@@ -203,13 +239,11 @@ export function EnginePanel(p: EnginePanelProps) {
           } disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           <Users className="size-4" aria-hidden="true" />
-          {settings.diarize ? 'Спикеры: разделять' : 'Спикеры: без разделения'}
+          {settings.diarize ? t('eng.diarOn') : t('eng.diarOff')}
         </button>
-        {settings.diarize && !(settings.mode === 'cloud' && provider === 'deepgram') && (
+        {settings.diarize && !serviceDiarize && (
           <p className="text-[11px] text-muted-foreground leading-relaxed px-1">
-            Локально в браузере: pyannote + WeSpeaker (~45 МБ моделей при первом
-            запуске, дальше из кэша). Точность ниже, чем у Deepgram, — короткие
-            реплики и перебивания могут путаться.
+            {t('eng.diarNote')}
           </p>
         )}
       </div>
@@ -219,7 +253,7 @@ export function EnginePanel(p: EnginePanelProps) {
         <div className="flex flex-col gap-1.5">
           <span className="chrome-label !text-[10px] flex items-center gap-1.5">
             <BookMarked className="size-3" aria-hidden="true" />
-            Справочники в Whisper · {settings.glossaryIds.length} из {p.glossaries.length}
+            {t('eng.glossaries')} · {settings.glossaryIds.length} / {p.glossaries.length}
           </span>
           <div className="flex flex-wrap gap-1.5">
             {p.glossaries.map((g) => {
@@ -230,7 +264,7 @@ export function EnginePanel(p: EnginePanelProps) {
                   type="button"
                   disabled={p.busy}
                   aria-pressed={on}
-                  title={`${g.terms.length} терминов: ${g.terms.slice(0, 5).join(', ')}${g.terms.length > 5 ? '…' : ''}`}
+                  title={`${g.terms.slice(0, 5).join(', ')}${g.terms.length > 5 ? '…' : ''}`}
                   onClick={() =>
                     set(
                       'glossaryIds',
@@ -252,29 +286,32 @@ export function EnginePanel(p: EnginePanelProps) {
             })}
           </div>
           <p className="text-[11px] text-muted-foreground/80 leading-snug">
-            Термины улетают в Whisper как словарная подсказка — редкие слова и
-            аббревиатуры распознаются точнее. Те же термины подмешиваются в LLM-промпты.
+            {t('eng.glossNote')}
           </p>
         </div>
       )}
 
       <div className="flex flex-col gap-3">
         <label className="flex flex-col gap-1.5">
-          <span className="chrome-label !text-[10px]">Язык речи</span>          <select
+          <span className="chrome-label !text-[10px]">{t('eng.speechLang')}</span>
+          <select
             value={settings.language}
             disabled={p.busy}
             onChange={(e) => set('language', e.target.value)}
             className="w-full min-w-0 panel-inset px-3 py-2.5 text-sm text-foreground bg-transparent focus:outline-none focus-visible:outline-2 focus-visible:outline-[hsl(var(--ring))] disabled:opacity-50"
           >
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code} className="bg-[hsl(var(--popover))]">
-                {l.label}
+            <option value="auto" className="bg-[hsl(var(--popover))]">
+              {t('eng.langAuto')}
+            </option>
+            {SPEECH_LANGUAGES.map((code) => (
+              <option key={code} value={code} className="bg-[hsl(var(--popover))]">
+                {languageName(code)}
               </option>
             ))}
           </select>
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="chrome-label !text-[10px]">Задача</span>
+          <span className="chrome-label !text-[10px]">{t('eng.task')}</span>
           <button
             type="button"
             disabled={p.busy || !translateSupported}
@@ -286,7 +323,7 @@ export function EnginePanel(p: EnginePanelProps) {
                 : 'panel-inset text-muted-foreground hover:text-foreground'
             } disabled:opacity-40 disabled:cursor-not-allowed`}
           >
-            {settings.translate && translateSupported ? 'Перевод → EN' : 'Транскрипция'}
+            {settings.translate && translateSupported ? t('eng.translate') : t('eng.transcription')}
           </button>
         </label>
       </div>
