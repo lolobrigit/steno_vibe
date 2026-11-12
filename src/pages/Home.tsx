@@ -1156,7 +1156,10 @@ export default function Home() {
         )}
       </div>
 
-      {compact && result ? (
+      {compact ? (
+        // в рабочей раскладке подробности — только при повторном запуске поверх готового текста;
+        // при первом распознавании задачи уже показаны справа, второй раз их не рисуем
+        result &&
         busy && (
           <details className="text-xs">
             <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{tr('run.details')}</summary>
