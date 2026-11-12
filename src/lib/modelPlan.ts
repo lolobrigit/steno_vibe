@@ -7,7 +7,7 @@
 // один на главный поток и воркер, файлы каждого варианта известны заранее и
 // скачиваются менеджером загрузок, а воркеру остаётся поднять модель из кэша.
 
-import { startDownload, type FileSpec } from './downloads'
+import { inspectFiles, startDownload, type FileSpec } from './downloads'
 import { detectGpu, isAbort, type GpuCaps } from './gpu'
 import { fetchRepoTree, hfFileSpec, HF_HOSTS } from './modelIntegrity'
 
@@ -196,8 +196,11 @@ export interface PrepareOptions {
   /** поднять модель в воркере из кэша; бросает, если вариант не завёлся */
   load: (variant: Variant) => Promise<void>
   signal?: AbortSignal
-  /** этап: скачивание файлов варианта или инициализация модели */
-  onStage?: (stage: 'download' | 'init', variant: Variant) => void
+  /**
+   * этап: storage — все файлы уже в кэше браузера, сети не нужно; download —
+   * докачка файлов варианта; init — запуск модели в воркере
+   */
+  onStage?: (stage: 'storage' | 'download' | 'init', variant: Variant) => void
 }
 
 /**
@@ -216,10 +219,15 @@ export async function prepareModel(o: PrepareOptions): Promise<Variant> {
       files = undefined // нет сети и списка — пусть воркер попробует из кэша
     }
     if (files === null) continue
-    if (files) {
+    // всё уже в кэше (или списка файлов нет, а сети тоже) — модель поднимается
+    // из хранилища браузера; пользователю так и говорим, а не «скачиваю»
+    const have = files ? await inspectFiles(files).catch(() => null) : null
+    if (files && !have?.complete) {
       // ошибка сети при скачивании от варианта не зависит — перебирать дальше бессмысленно
       o.onStage?.('download', variant)
       await startDownload(o.jobId, o.label, files, { immediate: true, signal: o.signal })
+    } else {
+      o.onStage?.('storage', variant)
     }
     try {
       o.onStage?.('init', variant)

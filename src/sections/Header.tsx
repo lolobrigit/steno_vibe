@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleHelp, CloudUpload, Moon, Palette, Settings, ShieldCheck, Sun } from 'lucide-react'
+import { CircleHelp, CloudUpload, Moon, Palette, Settings, ShieldCheck, Sparkles, Sun, SunMedium } from 'lucide-react'
 import { QUALITY_GUIDE } from '@/lib/models'
 import type { ThemeName } from '@/lib/storage'
 import { useT } from '@/i18n'
@@ -20,7 +20,7 @@ const STATUS: Record<HeaderProps['status'], { color: string; pulse: boolean }> =
   proc: { color: 'hsl(var(--primary))', pulse: true },
 }
 
-const THEMES: ThemeName[] = ['dark', 'light', 'neutral']
+const THEMES: ThemeName[] = ['aurora', 'aurora-light', 'dark', 'light', 'neutral']
 
 export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettings }: HeaderProps) {
   const s = STATUS[status]
@@ -149,7 +149,11 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {id === 'dark' ? (
+                {id === 'aurora' ? (
+                  <Sparkles className="size-3.5" aria-hidden="true" />
+                ) : id === 'aurora-light' ? (
+                  <SunMedium className="size-3.5" aria-hidden="true" />
+                ) : id === 'dark' ? (
                   <Moon className="size-3.5" aria-hidden="true" />
                 ) : id === 'light' ? (
                   <Sun className="size-3.5" aria-hidden="true" />

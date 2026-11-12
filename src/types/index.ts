@@ -40,6 +40,31 @@ export interface QueueItem {
   error?: string
 }
 
+/**
+ * Версия расшифровки. Распознавание, результат LLM и ручная правка не затирают
+ * друг друга: каждая попытка — отдельная версия, к любой можно вернуться и
+ * продолжить с ней работать (в том числе через LLM).
+ */
+export interface TranscriptVersion {
+  id: string
+  createdAt: number
+  /** asr — распознавание, llm — результат обработки, edit — копия для ручной правки */
+  kind: 'asr' | 'llm' | 'edit'
+  /** подпись для списка версий: «Whisper Small», «Грамматика · Qwen3» */
+  label: string
+  /** версия, из которой получена эта (для LLM и копий) */
+  parentId?: string
+  text: string
+  /** пустой массив — «плоская» версия: LLM вернул текст не в формате расшифровки */
+  segments: Segment[]
+  speakerNames: Record<string, string>
+  language?: string
+  durationSec: number
+  elapsedSec: number
+  engineLabel: string
+  modelLabel: string
+}
+
 export interface HistoryItem {
   id: string
   createdAt: number
@@ -55,4 +80,11 @@ export interface HistoryItem {
   hasAudio?: boolean
   /** пользовательские имена спикеров: «Спикер 1» → «Иван» */
   speakerNames?: Record<string, string>
+  /**
+   * Версии расшифровки. В localStorage не хранятся (переполнят его): лежат в
+   * IndexedDB (lib/versionStore.ts), а text/segments/speakerNames выше — копия
+   * активной версии. Поле заполняется при экспорте проекта.
+   */
+  versions?: TranscriptVersion[]
+  activeVersionId?: string
 }

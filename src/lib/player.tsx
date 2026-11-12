@@ -10,6 +10,19 @@ import { useT } from '@/i18n'
 
 export type MediaKind = 'audio' | 'video'
 
+/** Доступные скорости воспроизведения; выбор запоминается между сессиями. */
+export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
+const RATE_KEY = 'steno.rate.v1'
+
+function loadRate(): number {
+  try {
+    const n = Number(localStorage.getItem(RATE_KEY))
+    return PLAYBACK_RATES.includes(n) ? n : 1
+  } catch {
+    return 1
+  }
+}
+
 /** Видео ли это по MIME-типу или расширению имени файла. */
 export function detectMediaKind(blob: Blob, name: string): MediaKind {
   if (blob.type.startsWith('video/')) return 'video'
@@ -101,17 +114,30 @@ export const MediaPlayerBar = forwardRef<
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(fallbackDuration)
+  const [rate, setRateState] = useState(loadRate)
+  const rateRef = useRef(rate)
+  rateRef.current = rate
   const el = (kind === 'video' ? videoRef.current : audioRef.current) as HTMLMediaElement | null
   const durationRef = useRef(duration)
   durationRef.current = duration
 
   useEffect(() => {
     if (!el) return
+    // браузер сбрасывает скорость при загрузке нового источника — задаём заново
+    const applyRate = () => {
+      el.playbackRate = rateRef.current
+      el.preservesPitch = true
+    }
+    applyRate()
     const onTime = () => setTime(el.currentTime)
     const onMeta = () => {
+      applyRate()
       if (Number.isFinite(el.duration) && el.duration > 0) setDuration(el.duration)
     }
-    const onPlay = () => setPlaying(true)
+    const onPlay = () => {
+      applyRate()
+      setPlaying(true)
+    }
     const onPause = () => setPlaying(false)
     el.addEventListener('timeupdate', onTime)
     el.addEventListener('loadedmetadata', onMeta)
@@ -130,6 +156,16 @@ export const MediaPlayerBar = forwardRef<
   }, [el])
 
   useEffect(() => setDuration((d) => (d > 0 ? d : fallbackDuration)), [fallbackDuration])
+
+  const setRate = (r: number) => {
+    setRateState(r)
+    if (el) el.playbackRate = r
+    try {
+      localStorage.setItem(RATE_KEY, String(r))
+    } catch {
+      /* ignore */
+    }
+  }
 
   useImperativeHandle(
     ref,
@@ -161,7 +197,7 @@ export const MediaPlayerBar = forwardRef<
           ref={videoRef}
           src={url}
           preload="metadata"
-          className="w-full max-h-[42vh] rounded-lg bg-black cursor-pointer"
+          className="w-full max-h-[34vh] rounded-lg bg-black object-contain cursor-pointer"
           controls={false}
           playsInline
           onClick={() => {
@@ -198,6 +234,21 @@ export const MediaPlayerBar = forwardRef<
             setTime(sec)
           }}
         />
+        <label className="flex items-center gap-1 shrink-0">
+          <span className="sr-only">{t('pl.speed')}</span>
+          <select
+            value={rate}
+            onChange={(e) => setRate(Number(e.target.value))}
+            title={t('pl.speed')}
+            className="h-8 rounded-md border border-[hsl(var(--border))] bg-transparent px-1.5 font-mono text-[11px] tabular-nums text-foreground/90 cursor-pointer focus:outline-none focus-visible:outline-2 focus-visible:outline-[hsl(var(--ring))]"
+          >
+            {PLAYBACK_RATES.map((r) => (
+              <option key={r} value={r} className="bg-[hsl(var(--popover))]">
+                {r}×
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
     </div>
   )

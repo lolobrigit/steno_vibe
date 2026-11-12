@@ -13,7 +13,7 @@ type WorkerEvent =
 
 export interface LocalAiCallbacks {
   /** этап: скачивание файлов, инициализация модели, генерация */
-  onStage?: (stage: 'download' | 'init' | 'generate', device?: 'webgpu' | 'wasm') => void
+  onStage?: (stage: 'storage' | 'download' | 'init' | 'generate', device?: 'webgpu' | 'wasm') => void
   /** процент генерации ответа (токены/лимит) */
   onProgress?: (pct: number) => void
 }

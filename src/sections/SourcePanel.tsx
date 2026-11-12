@@ -18,6 +18,8 @@ interface SourcePanelProps {
   recError: string | null
   /** живое превью видеозаписи (экран или камера) */
   recPreview: MediaStream | null
+  /** загруженный файл для просмотра: видео показывается вместо зоны перетаскивания */
+  media?: { url: string; kind: 'audio' | 'video' } | null
   micMixed: boolean
   busy: boolean
   silenceStop: boolean
@@ -53,7 +55,7 @@ function LivePreview({ stream }: { stream: MediaStream }) {
       el.srcObject = null
     }
   }, [stream])
-  return <video ref={ref} muted playsInline className="w-full max-h-40 rounded bg-black" />
+  return <video ref={ref} muted playsInline className="w-full max-h-72 rounded-lg bg-black object-contain" />
 }
 
 const QUEUE_ICON: Record<QueueItem['status'], React.ReactNode> = {
@@ -150,6 +152,29 @@ export function SourcePanel(p: SourcePanelProps) {
         )}
       </div>
 
+      {/* видеозапись экрана/камеры и загруженное видео — вместо зоны перетаскивания */}
+      {p.recording && p.recPreview ? (
+        <LivePreview stream={p.recPreview} />
+      ) : p.media?.kind === 'video' && !p.fileLoading ? (
+        <div className="flex flex-col gap-2">
+          <video
+            key={p.media.url}
+            src={p.media.url}
+            controls
+            playsInline
+            preload="metadata"
+            className="w-full max-h-72 rounded-lg bg-black object-contain"
+          />
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="btn-console !min-h-8 px-2 self-start text-muted-foreground hover:text-foreground"
+          >
+            <FileAudio className="size-3.5" aria-hidden="true" />
+            {t('src.replace')}
+          </button>
+        </div>
+      ) : (
       <div
         role="button"
         tabIndex={0}
@@ -196,21 +221,21 @@ export function SourcePanel(p: SourcePanelProps) {
             </p>
           </>
         )}
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPT}
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) p.onFile(f)
-            e.target.value = ''
-          }}
-        />
       </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) p.onFile(f)
+          e.target.value = ''
+        }}
+      />
 
       {recBtn}
-      {p.recording && p.recPreview && <LivePreview stream={p.recPreview} />}
       {p.recording && (p.recSource === 'tab' || p.recSource === 'screen') && (
         <p className="text-[11px] font-mono text-muted-foreground -mt-2">
           {p.micMixed ? t('rec.mixed') : t('rec.tabOnly')}
