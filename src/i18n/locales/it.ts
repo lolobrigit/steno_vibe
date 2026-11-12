@@ -434,6 +434,13 @@ const it: Record<string, string> = {
   'media.expand': 'Ingrandisci il video e nascondi il pannello AI',
   'media.shrink': 'Mostra di nuovo il pannello AI',
   'run.details': 'Dettagli',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'Modifica testo',
+  'edit.save': 'Salva',
+  'edit.hint': 'Ctrl+Invio: salva, Esc: annulla',
+  'ai.expand': 'Espandi il risultato (sopra il video)',
+  'ai.collapse': 'Comprimi il risultato',
+  'ai.sync': 'Sincronizza lo scorrimento di risultato e trascrizione',
 }
 
 export default it

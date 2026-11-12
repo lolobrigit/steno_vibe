@@ -434,6 +434,13 @@ const nl: Record<string, string> = {
   'media.expand': 'Video vergroten en AI-paneel verbergen',
   'media.shrink': 'AI-paneel weer tonen',
   'run.details': 'Details',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'Tekst bewerken',
+  'edit.save': 'Opslaan',
+  'edit.hint': 'Ctrl+Enter — opslaan, Esc — annuleren',
+  'ai.expand': 'Resultaat uitvouwen (over de video)',
+  'ai.collapse': 'Resultaat invouwen',
+  'ai.sync': 'Scrollen van resultaat en transcriptie koppelen',
 }
 
 export default nl

@@ -434,6 +434,13 @@ const id: Record<string, string> = {
   'media.expand': 'Perbesar video dan sembunyikan panel AI',
   'media.shrink': 'Tampilkan lagi panel AI',
   'run.details': 'Detail',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'Edit teks',
+  'edit.save': 'Simpan',
+  'edit.hint': 'Ctrl+Enter — simpan, Esc — batal',
+  'ai.expand': 'Perluas hasil (di atas video)',
+  'ai.collapse': 'Ciutkan hasil',
+  'ai.sync': 'Tautkan gulir hasil dan transkrip',
 }
 
 export default id

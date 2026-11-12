@@ -461,6 +461,13 @@ const en: Record<string, string> = {
   'media.expand': 'Enlarge the video and hide the AI panel',
   'media.shrink': 'Show the AI panel again',
   'run.details': 'Details',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'Edit text',
+  'edit.save': 'Save',
+  'edit.hint': 'Ctrl+Enter — save, Esc — cancel',
+  'ai.expand': 'Expand the result (over the video)',
+  'ai.collapse': 'Collapse the result',
+  'ai.sync': 'Link scrolling of the result and the transcript',
 }
 
 export default en

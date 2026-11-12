@@ -7,7 +7,7 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import { ProjectsModal } from '@/sections/ProjectsModal'
 import { useTranscriptDoc } from '@/hooks/useTranscriptDoc'
 import { AiPanel, type AiApply } from '@/sections/AiPanel'
-import { joinWithPrevious, mergeSpeakerNames, mergeSpeakers, nextSpeakerId, NEW_SPEAKER, splitSegment, versionNumber } from '@/lib/transcript'
+import { plainText, joinWithPrevious, mergeSpeakerNames, mergeSpeakers, nextSpeakerId, NEW_SPEAKER, splitSegment, versionNumber } from '@/lib/transcript'
 import { Header } from '@/sections/Header'
 import { SourcePanel } from '@/sections/SourcePanel'
 import { EnginePanel } from '@/sections/EnginePanel'
@@ -109,6 +109,10 @@ export default function Home() {
   const [aiActive, setAiActive] = useState(false)
   /** видео развёрнуто на всё место, панель AI скрыта */
   const [mediaExpanded, setMediaExpanded] = useState(false)
+  /** результат LLM развёрнут вверх на место видео (десктоп) */
+  const [aiExpanded, setAiExpanded] = useState(false)
+  /** прокрутка результата LLM и расшифровки связана */
+  const [syncOn, setSyncOn] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [queue, setQueue] = useState<QueueItem[]>([])
@@ -812,6 +816,16 @@ export default function Home() {
     [doc],
   )
 
+  /** Правка текста реплики; время и спикер не меняются. */
+  const editSegment = useCallback(
+    (index: number, text: string) =>
+      doc.update((v) => {
+        const segments = v.segments.map((s, i) => (i === index ? { ...s, text } : s))
+        return { ...v, segments, text: plainText(segments) }
+      }),
+    [doc],
+  )
+
   const duplicateVersion = useCallback(() => {
     const base = doc.active
     if (!base) return
@@ -1057,6 +1071,46 @@ export default function Home() {
 
   const showAi = !!result && phase === 'done' && !busy
   const expanded = mediaExpanded && showAi
+  const llmOpen = aiExpanded && showAi && aiActive
+
+  // Связанная прокрутка: расшифровка и результат LLM едут к одному и тому же таймкоду.
+  useEffect(() => {
+    if (!syncOn) return
+    let off: (() => void) | null = null
+    const timer = window.setTimeout(() => {
+      const a = document.querySelector<HTMLElement>('[data-sync="transcript"]')
+      const b = document.querySelector<HTMLElement>('[data-sync="llm"]')
+      if (!a || !b) return
+      let lock = false
+      const link = (src: HTMLElement, dst: HTMLElement) => () => {
+        if (lock) return
+        const rows = Array.from(src.children) as HTMLElement[]
+        const first = rows.find((r) => r.offsetTop + r.offsetHeight > src.scrollTop)
+        if (!first) return
+        const start = Number(first.dataset.start)
+        const frac = Math.max(0, Math.min(1, (src.scrollTop - first.offsetTop) / (first.offsetHeight || 1)))
+        const targets = Array.from(dst.children) as HTMLElement[]
+        let t = targets[0]
+        for (const r of targets) if (Number(r.dataset.start) <= start) t = r
+        if (!t) return
+        lock = true
+        dst.scrollTop = t.offsetTop + frac * t.offsetHeight
+        window.setTimeout(() => (lock = false), 90)
+      }
+      const ab = link(a, b)
+      const ba = link(b, a)
+      a.addEventListener('scroll', ab, { passive: true })
+      b.addEventListener('scroll', ba, { passive: true })
+      off = () => {
+        a.removeEventListener('scroll', ab)
+        b.removeEventListener('scroll', ba)
+      }
+    }, 0)
+    return () => {
+      window.clearTimeout(timer)
+      off?.()
+    }
+  }, [syncOn, aiActive, llmOpen, doc.activeId, phase])
   const activeVersionNo = doc.activeId ? versionNumber(doc.versions, doc.activeId) : 1
 
   return (
@@ -1152,7 +1206,7 @@ export default function Home() {
             </section>
 
             {result && audio && (
-              <section className="panel p-3 shrink-0">
+              <section className={`panel p-3 shrink-0 ${llmOpen ? 'lg:hidden' : ''}`}>
                 <MediaPane
                   blob={audio.blob}
                   sourceName={resultName}
@@ -1190,6 +1244,10 @@ export default function Home() {
                     versionNumber={activeVersionNo}
                     onApply={applyAi}
                     onActive={setAiActive}
+                    expanded={llmOpen}
+                    onToggleExpand={() => setAiExpanded((v) => !v)}
+                    syncOn={syncOn}
+                    onToggleSync={() => setSyncOn((v) => !v)}
                     keys={keys}
                     settings={settings}
                     glossaries={glossaries}
@@ -1241,6 +1299,7 @@ export default function Home() {
                   onMergeSpeakers={mergeSpeakersInDoc}
                   onSplitSegment={splitInDoc}
                   onJoinPrevious={joinInDoc}
+                  onEditSegment={editSegment}
                 />
               </div>
             )}

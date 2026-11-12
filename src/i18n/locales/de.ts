@@ -434,6 +434,13 @@ const de: Record<string, string> = {
   'media.expand': 'Video vergrößern und KI-Bereich ausblenden',
   'media.shrink': 'KI-Bereich wieder anzeigen',
   'run.details': 'Details',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'Text bearbeiten',
+  'edit.save': 'Speichern',
+  'edit.hint': 'Strg+Eingabe – speichern, Esc – abbrechen',
+  'ai.expand': 'Ergebnis erweitern (über das Video)',
+  'ai.collapse': 'Ergebnis einklappen',
+  'ai.sync': 'Scrollen von Ergebnis und Transkript koppeln',
 }
 
 export default de

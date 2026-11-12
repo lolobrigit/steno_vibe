@@ -434,6 +434,13 @@ const ja: Record<string, string> = {
   'media.expand': '動画を拡大して AI パネルを隠す',
   'media.shrink': 'AI パネルを再表示',
   'run.details': '詳細',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'テキストを編集',
+  'edit.save': '保存',
+  'edit.hint': 'Ctrl+Enter で保存、Esc でキャンセル',
+  'ai.expand': '結果を拡大（動画の上に表示）',
+  'ai.collapse': '結果を折りたたむ',
+  'ai.sync': '結果と文字起こしのスクロールを連動',
 }
 
 export default ja
