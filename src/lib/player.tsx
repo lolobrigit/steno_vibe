@@ -40,6 +40,14 @@ function loadSubs(): boolean {
 
 /** Слова реплики и номер последнего «уже произнесённого» (оценка по доле символов). */
 export function activeWords(seg: Segment, time: number): { words: string[]; upto: number } {
+  // точные пословные метки (если Whisper их отдал) — иначе оценка по числу символов
+  if (seg.words?.length) {
+    let upto = -1
+    seg.words.forEach((w, i) => {
+      if (w.start <= time) upto = i
+    })
+    return { words: seg.words.map((w) => w.text.trim()), upto }
+  }
   const words = seg.text.split(/\s+/).filter(Boolean)
   const total = words.reduce((a, w) => a + w.length + 1, 0) || 1
   const frac = seg.end > seg.start ? Math.min(1, Math.max(0, (time - seg.start) / (seg.end - seg.start))) : 1
@@ -61,7 +69,7 @@ export function subtitleAt(segments: Segment[], time: number): Segment | null {
 }
 
 /** Нарисовать субтитр поверх кадра (для скриншота): те же подсветка слов и плашка. */
-function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number, seg: Segment, time: number, who?: string) {
+export function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number, seg: Segment, time: number, who?: string) {
   const size = Math.max(16, Math.round(h * 0.045))
   ctx.font = `600 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`
   ctx.textBaseline = 'middle'

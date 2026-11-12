@@ -304,3 +304,175 @@ export function legacyVersion(item: {
     modelLabel: item.modelLabel,
   }
 }
+
+// ── Поиск и замена ───────────────────────────────────────────────
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Позиции всех вхождений запроса в тексте реплики. */
+export function findInText(text: string, query: string, matchCase: boolean): { at: number; len: number }[] {
+  if (!query) return []
+  const re = new RegExp(escapeRe(query), matchCase ? 'g' : 'gi')
+  const out: { at: number; len: number }[] = []
+  for (const m of text.matchAll(re)) out.push({ at: m.index ?? 0, len: m[0].length })
+  return out
+}
+
+/** Номера реплик, где встречается запрос (с числом вхождений). */
+export function findMatches(segments: Segment[], query: string, matchCase: boolean): { index: number; count: number }[] {
+  const out: { index: number; count: number }[] = []
+  segments.forEach((s, index) => {
+    const count = findInText(s.text, query, matchCase).length
+    if (count) out.push({ index, count })
+  })
+  return out
+}
+
+/**
+ * Заменить запрос на `replacement`: во всех репликах или только в `onlyIndex`.
+ * Слова-метки реплики при изменении текста сбрасываются (они больше не совпадают с текстом).
+ */
+export function replaceInSegments(
+  segments: Segment[],
+  query: string,
+  replacement: string,
+  matchCase: boolean,
+  onlyIndex?: number,
+): { segments: Segment[]; count: number } {
+  if (!query) return { segments, count: 0 }
+  const re = new RegExp(escapeRe(query), matchCase ? 'g' : 'gi')
+  let count = 0
+  const next = segments.map((s, i) => {
+    if (onlyIndex !== undefined && i !== onlyIndex) return s
+    const n = findInText(s.text, query, matchCase).length
+    if (!n) return s
+    count += n
+    const { words: _w, ...rest } = s
+    return { ...rest, text: s.text.replace(re, () => replacement) }
+  })
+  return { segments: count ? next : segments, count }
+}
+
+// ── Слова-паразиты ───────────────────────────────────────────────
+
+const FILLERS: Record<string, string[]> = {
+  ru: ['э', 'ээ', 'эээ', 'эм', 'эмм', 'мм', 'ммм', 'ну', 'типа', 'как бы', 'так сказать', 'короче', 'значит'],
+  en: ['um', 'umm', 'uh', 'uhh', 'er', 'erm', 'hmm', 'mm', 'you know', 'i mean', 'like'],
+  de: ['äh', 'ähm', 'öh', 'hm', 'also', 'sozusagen'],
+  es: ['eh', 'em', 'este', 'o sea', 'pues', 'bueno'],
+  fr: ['euh', 'ben', 'bah', 'hein', 'genre', 'en fait'],
+  pt: ['é', 'hum', 'tipo', 'né', 'então'],
+  it: ['ehm', 'cioè', 'tipo', 'allora', 'insomma'],
+  nl: ['eh', 'uh', 'ehm', 'zeg maar', 'nou'],
+  pl: ['yyy', 'eee', 'no', 'jakby', 'wiesz', 'znaczy'],
+  tr: ['ııı', 'eee', 'yani', 'işte', 'şey'],
+  id: ['eh', 'em', 'anu', 'kan', 'gitu'],
+}
+
+/**
+ * Убрать из реплик «эээ», «um», «как бы» и т. п. Работает только с короткими
+ * однозначными междометиями и устойчивыми вставками; реплика, ставшая пустой, удаляется.
+ * Язык — код ('ru') или любое слово, начинающееся с него.
+ */
+export function removeFillers(segments: Segment[], language?: string): { segments: Segment[]; count: number } {
+  const code = (language ?? '').slice(0, 2).toLowerCase()
+  const list = [...new Set([...(FILLERS[code] ?? []), ...(code === 'ru' || code === 'en' ? [] : [])])]
+  if (list.length === 0) return { segments, count: 0 }
+  // «длинные» вставки идут первыми, чтобы «как бы» не распалось на «как» + «бы»
+  const alt = list.sort((a, b) => b.length - a.length).map(escapeRe).join('|')
+  const re = new RegExp(`(^|[\\s,.;:!?—-])(?:${alt})(?=$|[\\s,.;:!?—-])[,]?`, 'giu')
+  let count = 0
+  const out: Segment[] = []
+  for (const s of segments) {
+    let hit = 0
+    let text = s.text.replace(re, (_m, pre: string) => {
+      hit++
+      return pre
+    })
+    text = text.replace(/\s{2,}/g, ' ').replace(/\s+([,.;:!?])/g, '$1').replace(/^[,.;:\s-]+/, '').trim()
+    if (!hit) {
+      out.push(s)
+      continue
+    }
+    count += hit
+    if (!/[\p{L}\p{N}]/u.test(text)) continue
+    const { words: _w, ...rest } = s
+    out.push({ ...rest, text: text.charAt(0).toUpperCase() === text.charAt(0) ? text : text.charAt(0).toUpperCase() + text.slice(1) })
+  }
+  return { segments: count ? out : segments, count }
+}
+
+// ── Сравнение версий ─────────────────────────────────────────────
+
+export interface DiffOp {
+  kind: 'same' | 'add' | 'del'
+  text: string
+}
+
+/** Пословное сравнение двух текстов (LCS); подряд идущие слова одного вида склеиваются. */
+export function diffWords(a: string, b: string): DiffOp[] {
+  const x = a.split(/\s+/).filter(Boolean)
+  const y = b.split(/\s+/).filter(Boolean)
+  const n = x.length
+  const m = y.length
+  // защита от квадратичной памяти на очень длинных текстах
+  if (n * m > 4_000_000) {
+    return [
+      { kind: 'del', text: a },
+      { kind: 'add', text: b },
+    ]
+  }
+  const dp: Uint32Array[] = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1))
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      dp[i][j] = x[i] === y[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+  const ops: DiffOp[] = []
+  const push = (kind: DiffOp['kind'], word: string) => {
+    const last = ops[ops.length - 1]
+    if (last && last.kind === kind) last.text += ' ' + word
+    else ops.push({ kind, text: word })
+  }
+  let i = 0
+  let j = 0
+  while (i < n && j < m) {
+    if (x[i] === y[j]) {
+      push('same', x[i])
+      i++
+      j++
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) push('del', x[i++])
+    else push('add', y[j++])
+  }
+  while (i < n) push('del', x[i++])
+  while (j < m) push('add', y[j++])
+  return ops
+}
+
+// ── Пословные метки → реплики ────────────────────────────────────
+
+/** Собрать реплики из слов: конец — знак окончания фразы, пауза > gap с или слишком длинная реплика. */
+export function segmentsFromWords(
+  words: { text: string; start: number; end: number }[],
+  gap = 0.9,
+  maxWords = 28,
+): Segment[] {
+  const out: Segment[] = []
+  let cur: { text: string; start: number; end: number }[] = []
+  const flush = () => {
+    if (!cur.length) return
+    const text = cur.map((w) => w.text.trim()).join(' ').replace(/\s+([,.;:!?])/g, '$1').trim()
+    if (text) out.push({ start: cur[0].start, end: cur[cur.length - 1].end, text, words: cur })
+    cur = []
+  }
+  words.forEach((w, i) => {
+    const prev = cur[cur.length - 1]
+    if (prev && w.start - prev.end > gap) flush()
+    cur.push(w)
+    const next = words[i + 1]
+    const ends = /[.!?…]$/.test(w.text.trim())
+    if (ends || cur.length >= maxWords || (next && next.start - w.end > gap)) flush()
+  })
+  flush()
+  return out
+}

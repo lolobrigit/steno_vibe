@@ -4,6 +4,8 @@
 // «устройство + квантизация» приходит в сообщении — см. lib/modelPlan.ts.
 // Воркер не формирует текстов для интерфейса: наружу уходят только коды.
 
+import { segmentsFromWords } from '../lib/transcript'
+import type { Segment } from '../types'
 import { pipeline, env } from '@huggingface/transformers'
 
 env.allowLocalModels = false
@@ -37,6 +39,8 @@ interface RunMsg {
   task: 'transcribe' | 'translate'
   /** справочник терминов: подсказка словаря для декодера */
   initialPrompt?: string
+  /** пословные метки: реплики собираются из слов; при ошибке — обычный режим */
+  wordTimestamps?: boolean
 }
 
 type InMsg = LoadMsg | RunMsg | { type: 'cancel' }
@@ -114,21 +118,44 @@ self.onmessage = async (ev: MessageEvent<InMsg>) => {
         }
       }
       let out: { text: string; chunks?: Array<{ timestamp: [number, number | null]; text: string }> }
-      try {
-        out = await transcriber(msg.audio, {
+      let wordSegments: Segment[] | null = null
+      const run = (ts: true | 'word') =>
+        transcriber!(msg.audio, {
           chunk_length_s: 30,
           stride_length_s: 5,
-          return_timestamps: true,
+          return_timestamps: ts,
           language: msg.language,
           task: msg.task,
           // справочник терминов: Whisper использует как словарную подсказку
           ...(msg.initialPrompt ? { initial_prompt: msg.initialPrompt } : {}),
-        })
+        }) as Promise<typeof out>
+      try {
+        if (msg.wordTimestamps) {
+          try {
+            out = await run('word')
+            const words = (out.chunks ?? [])
+              .map((c) => ({
+                text: (c.text ?? '').trim(),
+                start: c.timestamp[0] ?? 0,
+                end: c.timestamp[1] ?? c.timestamp[0] ?? 0,
+              }))
+              .filter((w) => w.text.length > 0)
+            if (words.length) wordSegments = segmentsFromWords(words)
+          } catch (e) {
+            const m = e instanceof Error ? e.message : String(e)
+            if (cancelRequested || m === CANCELLED) throw e
+            // модель без выравнивания слов — обычный режим
+            chunksDone = 0
+            out = await run(true)
+          }
+        } else {
+          out = await run(true)
+        }
       } finally {
         modelRef.generate = origGenerate
       }
       if (cancelRequested) throw new Error(CANCELLED)
-      const segments = (out.chunks ?? [])
+      const segments = wordSegments ?? (out.chunks ?? [])
         .map((c) => ({
           start: c.timestamp[0] ?? 0,
           end: c.timestamp[1] ?? c.timestamp[0] ?? 0,

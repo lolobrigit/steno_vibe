@@ -3,11 +3,13 @@ import { AlertTriangle, Play, RotateCcw, Square } from 'lucide-react'
 import { Rail, type Flyout } from '@/sections/Rail'
 import { MediaPane } from '@/sections/MediaPane'
 import type { PlayerHandle } from '@/lib/player'
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { FastForward, Maximize2, Minimize2 } from 'lucide-react'
+import type { TranscriptVersion } from '@/types'
 import { ProjectsModal } from '@/sections/ProjectsModal'
 import { useTranscriptDoc } from '@/hooks/useTranscriptDoc'
 import { AiPanel, type AiApply } from '@/sections/AiPanel'
-import { plainText, joinWithPrevious, mergeSpeakerNames, mergeSpeakers, nextSpeakerId, NEW_SPEAKER, splitSegment, versionNumber } from '@/lib/transcript'
+import { activeSegmentIndex, subtitleAt } from '@/lib/player'
+import { removeFillers, replaceInSegments, plainText, joinWithPrevious, mergeSpeakerNames, mergeSpeakers, nextSpeakerId, NEW_SPEAKER, splitSegment, versionNumber } from '@/lib/transcript'
 import { Header } from '@/sections/Header'
 import { SourcePanel } from '@/sections/SourcePanel'
 import { EnginePanel } from '@/sections/EnginePanel'
@@ -113,6 +115,16 @@ export default function Home() {
   const [aiExpanded, setAiExpanded] = useState(false)
   /** прокрутка результата LLM и расшифровки связана */
   const [syncOn, setSyncOn] = useState(true)
+  const [shots, setShots] = useState<{ time: number; blob: Blob }[]>([])
+  const [mobileTab, setMobileTab] = useState<'media' | 'text' | 'ai'>('text')
+  /** пропускать паузы между репликами при воспроизведении */
+  const [skipPauses, setSkipPauses] = useState(() => {
+    try {
+      return localStorage.getItem('steno.skip.v1') === '1'
+    } catch {
+      return false
+    }
+  })
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [queue, setQueue] = useState<QueueItem[]>([])
@@ -494,6 +506,7 @@ export default function Home() {
           { onProgress: (p) => ui?.task?.update('asr', { pct: p }) },
           glossHint || undefined,
           signal,
+          settings.wordTimestamps,
         )
         ui?.task?.done('asr')
         if (dia && !dia.isSettled()) ui?.status(t('st.diarizing'))
@@ -741,10 +754,76 @@ export default function Home() {
     [audio?.historyId, clearAll],
   )
 
+  // Отмена/повтор правок активной версии (в памяти; сбрасывается при смене версии)
+  type Snap = Pick<TranscriptVersion, 'segments' | 'text' | 'speakerNames'>
+  const undoRef = useRef<{ id: string | null; past: Snap[]; future: Snap[] }>({ id: null, past: [], future: [] })
+  const [, setUndoTick] = useState(0)
+  useEffect(() => {
+    undoRef.current = { id: doc.activeId, past: [], future: [] }
+    setUndoTick((n) => n + 1)
+  }, [doc.activeId])
+  const upd = (fn: (v: TranscriptVersion) => TranscriptVersion) => {
+    const a = doc.active
+    if (a) {
+      const u = undoRef.current
+      u.past.push({ segments: a.segments, text: a.text, speakerNames: a.speakerNames })
+      if (u.past.length > 60) u.past.shift()
+      u.future = []
+      setUndoTick((n) => n + 1)
+    }
+    doc.update(fn)
+  }
+  const undo = () => {
+    const a = doc.active
+    const snap = undoRef.current.past.pop()
+    if (!a || !snap) return
+    undoRef.current.future.push({ segments: a.segments, text: a.text, speakerNames: a.speakerNames })
+    setUndoTick((n) => n + 1)
+    doc.update((v) => ({ ...v, ...snap }))
+  }
+  const redo = () => {
+    const a = doc.active
+    const snap = undoRef.current.future.pop()
+    if (!a || !snap) return
+    undoRef.current.past.push({ segments: a.segments, text: a.text, speakerNames: a.speakerNames })
+    setUndoTick((n) => n + 1)
+    doc.update((v) => ({ ...v, ...snap }))
+  }
+
+  const replaceInDoc = (query: string, replacement: string, matchCase: boolean, index?: number): number => {
+    const a = doc.active
+    if (!a) return 0
+    const res = replaceInSegments(a.segments, query, replacement, matchCase, index)
+    if (!res.count) return 0
+    upd((v) => ({ ...v, segments: res.segments, text: plainText(res.segments) }))
+    return res.count
+  }
+
+  const cleanFillers = (): number => {
+    const a = doc.active
+    if (!a) return 0
+    const res = removeFillers(a.segments, a.language ?? result?.language)
+    if (!res.count) return 0
+    upd((v) => ({ ...v, segments: res.segments, text: plainText(res.segments) }))
+    return res.count
+  }
+
+  const segmentMeta = (index: number, patch: { mark?: boolean; note?: string }) =>
+    upd((v) => ({
+      ...v,
+      segments: v.segments.map((s, i) => {
+        if (i !== index) return s
+        const n = { ...s, ...patch }
+        if (!n.note) delete n.note
+        if (!n.mark) delete n.mark
+        return n
+      }),
+    }))
+
   /** Переименование спикера: имя хранится отдельно, сегменты не трогаем. */
   const renameSpeaker = useCallback(
     (speaker: string, name: string) =>
-      doc.update((v) => {
+      upd((v) => {
         const names = { ...v.speakerNames }
         if (name.trim()) names[speaker] = name.trim()
         else delete names[speaker]
@@ -756,7 +835,7 @@ export default function Home() {
   /** Ручное переназначение спикера у реплики (если диаризация ошиблась). */
   const reassignSegment = useCallback(
     (index: number, speaker: string) =>
-      doc.update((v) => ({
+      upd((v) => ({
         ...v,
         segments: v.segments.map((s, i) => (i === index ? { ...s, speaker } : s)),
       })),
@@ -766,7 +845,7 @@ export default function Home() {
   /** Объединить двух спикеров в расшифровке. */
   const mergeSpeakersInDoc = useCallback(
     (from: string, into: string) =>
-      doc.update((v) => ({
+      upd((v) => ({
         ...v,
         segments: mergeSpeakers(v.segments, from, into),
         speakerNames: mergeSpeakerNames(v.speakerNames, from, into),
@@ -777,7 +856,7 @@ export default function Home() {
   /** Разделить длинную реплику: вторая часть — другому (или новому) спикеру. */
   const splitInDoc = useCallback(
     (index: number, offset: number, speaker: string) =>
-      doc.update((v) => {
+      upd((v) => {
         const sp = speaker === NEW_SPEAKER ? nextSpeakerId(v.segments) : speaker
         const segments = splitSegment(v.segments, index, offset, sp)
         return segments === v.segments ? v : { ...v, segments }
@@ -787,7 +866,7 @@ export default function Home() {
 
   const joinInDoc = useCallback(
     (index: number) =>
-      doc.update((v) => {
+      upd((v) => {
         const segments = joinWithPrevious(v.segments, index)
         return segments === v.segments ? v : { ...v, segments }
       }),
@@ -819,7 +898,7 @@ export default function Home() {
   /** Правка текста реплики; время и спикер не меняются. */
   const editSegment = useCallback(
     (index: number, text: string) =>
-      doc.update((v) => {
+      upd((v) => {
         const segments = v.segments.map((s, i) => (i === index ? { ...s, text } : s))
         return { ...v, segments, text: plainText(segments) }
       }),
@@ -890,6 +969,66 @@ export default function Home() {
   const cancelFile = useCallback(() => {
     if (!fileLoading) setPendingFile(null)
   }, [fileLoading])
+
+  // Горячие клавиши плеера и отмены (не срабатывают при вводе текста)
+  const hk = useRef({ undo, redo, segments: result?.segments ?? [], time: 0, playing: false })
+  hk.current = { undo, redo, segments: result?.segments ?? [], time: playerState.time, playing: playerState.playing }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
+      const h = hk.current
+      const p = playerRef.current
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) h.redo()
+        else h.undo()
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        h.redo()
+        return
+      }
+      if (!p || e.ctrlKey || e.metaKey || e.altKey) return
+      const k = e.key.toLowerCase()
+      if (k === ' ' || k === 'k') {
+        e.preventDefault()
+        p.toggle()
+      } else if (k === 'arrowleft') {
+        e.preventDefault()
+        p.seek(h.time - 5)
+      } else if (k === 'arrowright') {
+        e.preventDefault()
+        p.seek(h.time + 5)
+      } else if (k === 'j') p.seek(h.time - 10)
+      else if (k === 'l') p.seek(h.time + 10)
+      else if (k === 'n' || k === 'p') {
+        const i = activeSegmentIndex(h.segments, h.time)
+        const j = k === 'n' ? i + 1 : h.time - (h.segments[i]?.start ?? 0) > 1.5 ? i : i - 1
+        const seg = h.segments[Math.max(0, Math.min(h.segments.length - 1, j))]
+        if (seg) p.seek(seg.start)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Пропуск пауз: если до следующей реплики больше ~1,5 с тишины — перематываем к ней
+  const lastSkip = useRef(-1)
+  useEffect(() => {
+    if (!skipPauses || !playerState.playing || !result) return
+    const segs = result.segments
+    const t = playerState.time
+    const i = activeSegmentIndex(segs, t)
+    const next = segs[i + 1]
+    const gapStart = i < 0 ? 0 : segs[i].end + 0.4
+    const gapEnd = i < 0 ? segs[0]?.start : next?.start
+    if (gapEnd === undefined || t < gapStart || gapEnd - t < 1.5) return
+    if (lastSkip.current === gapEnd) return
+    lastSkip.current = gapEnd
+    playerRef.current?.seek(gapEnd - 0.2)
+  }, [skipPauses, playerState.playing, playerState.time, result])
 
   const stage: 'start' | 'prepare' | 'work' = recorder.recording
     ? 'prepare'
@@ -1181,6 +1320,26 @@ export default function Home() {
       ) : (
         // Работа с расшифровкой: рейка | слева видео + AI | справа расшифровка почти на всю высоту
         <main className="flex-1 min-h-0 w-full max-w-[1760px] mx-auto px-4 py-4 grid gap-4 grid-cols-1 lg:grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] lg:overflow-hidden">
+          {/* на телефоне — вкладки вместо трёх колонок */}
+          <div className="lg:hidden flex gap-1 panel p-1 sticky top-0 z-10" role="tablist">
+            {(['media', 'text', 'ai'] as const)
+              .filter((k) => k !== 'media' || (result && audio))
+              .map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  aria-selected={mobileTab === k}
+                  onClick={() => setMobileTab(k)}
+                  className={`flex-1 h-9 rounded-md text-xs font-medium cursor-pointer ${
+                    mobileTab === k ? 'bg-[hsl(var(--primary)/0.16)] text-[hsl(var(--primary))]' : 'text-muted-foreground'
+                  }`}
+                >
+                  {tr(`tab.${k}`)}
+                </button>
+              ))}
+          </div>
+
           <Rail
             open={flyout}
             onOpen={setFlyout}
@@ -1206,7 +1365,7 @@ export default function Home() {
             </section>
 
             {result && audio && (
-              <section className={`panel p-3 shrink-0 ${llmOpen ? 'lg:hidden' : ''}`}>
+              <section className={`panel p-3 shrink-0 ${mobileTab === 'media' ? '' : 'max-lg:hidden'} ${llmOpen ? 'lg:hidden' : ''}`}>
                 <MediaPane
                   blob={audio.blob}
                   sourceName={resultName}
@@ -1216,8 +1375,31 @@ export default function Home() {
                   playerRef={playerRef}
                   onState={setPlayerState}
                   videoMaxHeight={expanded ? 'calc(100dvh - 300px)' : aiActive ? '24vh' : '38vh'}
+                  onShotsChange={setShots}
                   extra={
-                    showAi ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSkipPauses((v) => {
+                            try {
+                              localStorage.setItem('steno.skip.v1', v ? '0' : '1')
+                            } catch {
+                              /* ignore */
+                            }
+                            return !v
+                          })
+                        }}
+                        aria-pressed={skipPauses}
+                        title={tr('skip.toggle')}
+                        aria-label={tr('skip.toggle')}
+                        className={`size-8 shrink-0 inline-flex items-center justify-center rounded-md cursor-pointer transition-colors ${
+                          skipPauses ? 'text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.14)]' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <FastForward className="size-4" aria-hidden="true" />
+                      </button>
+                    {showAi ? (
                       <button
                         type="button"
                         onClick={() => setMediaExpanded((v) => !v)}
@@ -1228,14 +1410,15 @@ export default function Home() {
                       >
                         {expanded ? <Minimize2 className="size-4" aria-hidden="true" /> : <Maximize2 className="size-4" aria-hidden="true" />}
                       </button>
-                    ) : null
+                    ) : null}
+                    </>
                   }
                 />
               </section>
             )}
 
             {!expanded && (
-              <div className="min-h-[320px] lg:min-h-0 lg:flex-1">
+              <div className={`min-h-[320px] lg:min-h-0 lg:flex-1 ${mobileTab === 'ai' ? '' : 'max-lg:hidden'}`}>
                 {showAi && result ? (
                   <AiPanel
                     fill
@@ -1264,7 +1447,7 @@ export default function Home() {
           </div>
 
           <section
-            className="panel p-3 md:p-4 flex flex-col gap-3 min-w-0 min-h-[70dvh] lg:min-h-0 lg:h-full"
+            className={`panel p-3 md:p-4 flex flex-col gap-3 min-w-0 min-h-[70dvh] lg:min-h-0 lg:h-full ${mobileTab === 'text' || !result ? '' : 'max-lg:hidden'}`}
             aria-label={tr('main.aria')}
           >
             {!result ? (
@@ -1300,6 +1483,14 @@ export default function Home() {
                   onSplitSegment={splitInDoc}
                   onJoinPrevious={joinInDoc}
                   onEditSegment={editSegment}
+                  onSegmentMeta={segmentMeta}
+                  onReplace={replaceInDoc}
+                  onCleanFillers={cleanFillers}
+                  canUndo={undoRef.current.past.length > 0}
+                  canRedo={undoRef.current.future.length > 0}
+                  onUndo={undo}
+                  onRedo={redo}
+                  shots={shots}
                 />
               </div>
             )}

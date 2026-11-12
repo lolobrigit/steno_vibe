@@ -125,6 +125,7 @@ export function transcribeLocal(
   cb: LocalEngineCallbacks,
   initialPrompt?: string,
   signal?: AbortSignal,
+  wordTimestamps?: boolean,
 ): Promise<{ text: string; segments: Segment[]; elapsedSec: number }> {
   const w = getWorker()
   return new Promise((resolve, reject) => {
@@ -168,6 +169,6 @@ export function transcribeLocal(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
     const copy = new Float32Array(audio) // transferable копия
-    w.postMessage({ type: 'transcribe', audio: copy, language, task, initialPrompt }, [copy.buffer])
+    w.postMessage({ type: 'transcribe', audio: copy, language, task, initialPrompt, wordTimestamps }, [copy.buffer])
   })
 }
