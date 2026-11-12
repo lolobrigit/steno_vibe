@@ -422,6 +422,18 @@ const ru: Record<string, string> = {
   'split.badPos': 'Поставьте курсор внутрь текста, а не на его край',
   'hdr.theme.aurora': 'Аврора',
   'hdr.theme.aurora-light': 'Аврора светлая',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': 'Субтитры поверх видео',
+  'shot.btn': 'Сделать скриншот',
+  'shot.title': 'Скриншоты',
+  'shot.copy': 'Копировать в буфер',
+  'shot.copied': 'Скопировано',
+  'shot.download': 'Скачать PNG',
+  'shot.delete': 'Удалить',
+  'shot.copyFailed': 'Не удалось скопировать в буфер — скачайте изображение',
+  'media.expand': 'Увеличить видео и скрыть панель AI',
+  'media.shrink': 'Снова показать панель AI',
+  'run.details': 'Подробности',
 }
 
 export default ru

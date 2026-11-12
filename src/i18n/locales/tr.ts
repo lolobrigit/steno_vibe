@@ -422,6 +422,18 @@ const tr: Record<string, string> = {
   'split.badPos': 'İmleci metnin kenarına değil içine koyun',
   'hdr.theme.aurora': 'Aurora',
   'hdr.theme.aurora-light': 'Aurora açık',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': 'Videonun üzerinde altyazı',
+  'shot.btn': 'Ekran görüntüsü al',
+  'shot.title': 'Ekran görüntüleri',
+  'shot.copy': 'Panoya kopyala',
+  'shot.copied': 'Kopyalandı',
+  'shot.download': 'PNG indir',
+  'shot.delete': 'Sil',
+  'shot.copyFailed': 'Panoya kopyalanamadı — görüntüyü indirin',
+  'media.expand': 'Videoyu büyüt ve YZ panelini gizle',
+  'media.shrink': 'YZ panelini yeniden göster',
+  'run.details': 'Ayrıntılar',
 }
 
 export default tr

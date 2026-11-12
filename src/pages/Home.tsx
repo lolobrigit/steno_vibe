@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Play, RotateCcw, Square } from 'lucide-react'
 import { Rail, type Flyout } from '@/sections/Rail'
+import { MediaPane } from '@/sections/MediaPane'
+import type { PlayerHandle } from '@/lib/player'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import { ProjectsModal } from '@/sections/ProjectsModal'
 import { useTranscriptDoc } from '@/hooks/useTranscriptDoc'
 import { AiPanel, type AiApply } from '@/sections/AiPanel'
@@ -100,6 +103,12 @@ export default function Home() {
   const [flyout, setFlyout] = useState<Flyout | null>(null)
   const [projectsOpen, setProjectsOpen] = useState(false)
   const [mediaUrl, setMediaUrl] = useState<string | null>(null)
+  const playerRef = useRef<PlayerHandle | null>(null)
+  const [playerState, setPlayerState] = useState({ playing: false, time: 0, duration: 0 })
+  /** LLM работает или есть результат — видео сужается */
+  const [aiActive, setAiActive] = useState(false)
+  /** видео развёрнуто на всё место, панель AI скрыта */
+  const [mediaExpanded, setMediaExpanded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [queue, setQueue] = useState<QueueItem[]>([])
@@ -941,7 +950,7 @@ export default function Home() {
   )
 
   /** Запуск: кнопки, статус, список задач, ошибка. */
-  const runBar = (
+  const runBar = (compact: boolean) => (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -970,6 +979,9 @@ export default function Home() {
             {statusText} · {formatDurationShort(elapsed)}
           </span>
         )}
+        {compact && busy && result && (
+          <div className="flex-1 min-w-[120px]">{wave(24, true)}</div>
+        )}
         {phase === 'loading-model' && loadFraction !== undefined && (
           <span className="font-mono text-[12px] tabular-nums" style={{ color: 'hsl(var(--warn))' }}>
             {Math.floor(loadFraction * 100)}%
@@ -991,7 +1003,18 @@ export default function Home() {
         )}
       </div>
 
-      <TaskList tasks={tasks} />
+      {compact && result ? (
+        busy && (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">{tr('run.details')}</summary>
+            <div className="mt-2">
+              <TaskList tasks={tasks} />
+            </div>
+          </details>
+        )
+      ) : (
+        <TaskList tasks={tasks} />
+      )}
 
       {error && (
         <div
@@ -1021,8 +1044,8 @@ export default function Home() {
     </div>
   )
 
-  const wave = (height: number) => (
-    <div className={`panel-inset px-3 py-2 ${phase === 'transcribing' ? 'scanline-active' : ''}`}>
+  const wave = (height: number, bare = false) => (
+    <div className={`${bare ? '' : 'panel-inset px-3 py-2'} ${phase === 'transcribing' ? 'scanline-active' : ''}`}>
       <Waveform
         levels={waveLevels}
         live={recorder.recording}
@@ -1033,6 +1056,7 @@ export default function Home() {
   )
 
   const showAi = !!result && phase === 'done' && !busy
+  const expanded = mediaExpanded && showAi
   const activeVersionNo = doc.activeId ? versionNumber(doc.versions, doc.activeId) : 1
 
   return (
@@ -1089,7 +1113,7 @@ export default function Home() {
               {enginePanel}
               <section className="panel p-4 flex flex-col gap-4" aria-label={tr('main.aria')}>
                 {wave(72)}
-                {runBar}
+                {runBar(false)}
               </section>
             </>
           )}
@@ -1101,8 +1125,8 @@ export default function Home() {
           )}
         </main>
       ) : (
-        // Работа с расшифровкой: рейка + плеер/текст + LLM, всё в пределах экрана
-        <main className="flex-1 min-h-0 w-full max-w-[1760px] mx-auto px-4 py-4 grid gap-4 grid-cols-1 lg:grid-cols-[56px_minmax(0,1fr)_minmax(340px,430px)] lg:overflow-hidden">
+        // Работа с расшифровкой: рейка | слева видео + AI | справа расшифровка почти на всю высоту
+        <main className="flex-1 min-h-0 w-full max-w-[1760px] mx-auto px-4 py-4 grid gap-4 grid-cols-1 lg:grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)] lg:overflow-hidden">
           <Rail
             open={flyout}
             onOpen={setFlyout}
@@ -1122,15 +1146,77 @@ export default function Home() {
             }
           />
 
+          <div className="flex flex-col gap-3 min-w-0 min-h-0 lg:h-full lg:overflow-y-auto">
+            <section className="panel p-3 shrink-0" aria-label={tr('main.aria')}>
+              {runBar(true)}
+            </section>
+
+            {result && audio && (
+              <section className="panel p-3 shrink-0">
+                <MediaPane
+                  blob={audio.blob}
+                  sourceName={resultName}
+                  segments={result.segments}
+                  speakerNames={speakerNames}
+                  durationSec={result.durationSec}
+                  playerRef={playerRef}
+                  onState={setPlayerState}
+                  videoMaxHeight={expanded ? 'calc(100dvh - 300px)' : aiActive ? '24vh' : '38vh'}
+                  extra={
+                    showAi ? (
+                      <button
+                        type="button"
+                        onClick={() => setMediaExpanded((v) => !v)}
+                        aria-pressed={expanded}
+                        title={expanded ? tr('media.shrink') : tr('media.expand')}
+                        aria-label={expanded ? tr('media.shrink') : tr('media.expand')}
+                        className="hidden lg:inline-flex size-8 shrink-0 items-center justify-center rounded-md cursor-pointer text-muted-foreground hover:text-foreground"
+                      >
+                        {expanded ? <Minimize2 className="size-4" aria-hidden="true" /> : <Maximize2 className="size-4" aria-hidden="true" />}
+                      </button>
+                    ) : null
+                  }
+                />
+              </section>
+            )}
+
+            {!expanded && (
+              <div className="min-h-[320px] lg:min-h-0 lg:flex-1">
+                {showAi && result ? (
+                  <AiPanel
+                    fill
+                    result={result}
+                    speakerNames={speakerNames}
+                    versionNumber={activeVersionNo}
+                    onApply={applyAi}
+                    onActive={setAiActive}
+                    keys={keys}
+                    settings={settings}
+                    glossaries={glossaries}
+                    endpoints={endpoints}
+                    taskApi={taskApi}
+                  />
+                ) : (
+                  <section className="panel p-4 text-sm text-muted-foreground h-full min-h-[120px] flex items-center justify-center text-center">
+                    {tr('ai.placeholder')}
+                  </section>
+                )}
+              </div>
+            )}
+          </div>
+
           <section
-            className="panel p-3 md:p-4 flex flex-col gap-3 min-w-0 min-h-0 lg:h-full"
+            className="panel p-3 md:p-4 flex flex-col gap-3 min-w-0 min-h-[70dvh] lg:min-h-0 lg:h-full"
             aria-label={tr('main.aria')}
           >
-            {(!result || busy) && wave(56)}
-            {runBar}
-            {result && (phase === 'done' || busy) && (
+            {!result ? (
+              <>
+                {wave(72)}
+                <TaskList tasks={tasks} />
+              </>
+            ) : (
               <div
-                className={`flex-1 min-h-0 min-h-[60dvh] lg:min-h-0 ${
+                className={`flex-1 min-h-0 ${
                   busy
                     ? 'opacity-40 saturate-50 pointer-events-none transition-opacity duration-300'
                     : 'transition-opacity duration-300'
@@ -1141,7 +1227,9 @@ export default function Home() {
                   fill
                   result={result}
                   sourceName={resultName}
-                  audioBlob={audio?.blob ?? null}
+                  hasMedia={!!audio?.blob}
+                  playerRef={playerRef}
+                  playerState={playerState}
                   speakerNames={speakerNames}
                   versions={doc.versions}
                   activeVersionId={doc.activeId}
@@ -1157,27 +1245,6 @@ export default function Home() {
               </div>
             )}
           </section>
-
-          <div className="min-w-0 min-h-0 lg:h-full">
-            {showAi && result ? (
-              <AiPanel
-                fill
-                result={result}
-                speakerNames={speakerNames}
-                versionNumber={activeVersionNo}
-                onApply={applyAi}
-                keys={keys}
-                settings={settings}
-                glossaries={glossaries}
-                endpoints={endpoints}
-                taskApi={taskApi}
-              />
-            ) : (
-              <section className="panel p-4 text-sm text-muted-foreground lg:h-full flex items-center justify-center text-center">
-                {tr('ai.placeholder')}
-              </section>
-            )}
-          </div>
         </main>
       )}
 

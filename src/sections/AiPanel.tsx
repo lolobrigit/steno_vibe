@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, Copy, Layers, Loader2, Sparkles, Square } from 'lucide-react'
 import { AI_ACTIONS } from '@/lib/models'
 import { aiProviderLabel, runAiPrompt, type AiProvider, AI_PROVIDERS, LLM_CLOUD_MODELS } from '@/lib/ai'
@@ -51,6 +51,8 @@ interface AiPanelProps {
   onApply: (a: AiApply) => void
   /** занять всю высоту колонки и прокручиваться внутри */
   fill?: boolean
+  /** идёт обработка или есть результат — Home сужает видео */
+  onActive?: (active: boolean) => void
   keys: ApiKeys
   settings: AppSettings
   glossaries: Glossary[]
@@ -71,6 +73,7 @@ export function AiPanel({
   versionNumber,
   onApply,
   fill = false,
+  onActive,
   keys,
   settings,
   glossaries,
@@ -98,6 +101,11 @@ export function AiPanel({
   const [keepFormat, setKeepFormat] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const active = busy || output !== null
+  useEffect(() => {
+    onActive?.(active)
+  }, [active, onActive])
+  useEffect(() => () => onActive?.(false), [onActive])
   const abortRef = useRef<AbortController | null>(null)
   const downloads = useDownloads()
 

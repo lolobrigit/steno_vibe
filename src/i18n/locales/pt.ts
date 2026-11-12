@@ -422,6 +422,18 @@ const pt: Record<string, string> = {
   'split.badPos': 'Coloque o cursor dentro do texto, não na borda',
   'hdr.theme.aurora': 'Aurora',
   'hdr.theme.aurora-light': 'Aurora clara',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': 'Legendas sobre o vídeo',
+  'shot.btn': 'Tirar uma captura',
+  'shot.title': 'Capturas',
+  'shot.copy': 'Copiar para a área de transferência',
+  'shot.copied': 'Copiado',
+  'shot.download': 'Baixar PNG',
+  'shot.delete': 'Excluir',
+  'shot.copyFailed': 'Não foi possível copiar para a área de transferência — baixe a imagem',
+  'media.expand': 'Ampliar o vídeo e ocultar o painel de IA',
+  'media.shrink': 'Mostrar o painel de IA novamente',
+  'run.details': 'Detalhes',
 }
 
 export default pt

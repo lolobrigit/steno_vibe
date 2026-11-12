@@ -422,6 +422,18 @@ const fr: Record<string, string> = {
   'split.badPos': 'Placez le curseur dans le texte, pas à son bord',
   'hdr.theme.aurora': 'Aurore',
   'hdr.theme.aurora-light': 'Aurore claire',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': 'Sous-titres sur la vidéo',
+  'shot.btn': 'Faire une capture',
+  'shot.title': 'Captures',
+  'shot.copy': 'Copier dans le presse-papiers',
+  'shot.copied': 'Copié',
+  'shot.download': 'Télécharger le PNG',
+  'shot.delete': 'Supprimer',
+  'shot.copyFailed': 'Copie impossible dans le presse-papiers — téléchargez l’image',
+  'media.expand': 'Agrandir la vidéo et masquer le panneau IA',
+  'media.shrink': 'Réafficher le panneau IA',
+  'run.details': 'Détails',
 }
 
 export default fr

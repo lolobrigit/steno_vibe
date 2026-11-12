@@ -422,6 +422,18 @@ const ja: Record<string, string> = {
   'split.badPos': 'カーソルは端ではなくテキストの途中に置いてください',
   'hdr.theme.aurora': 'オーロラ',
   'hdr.theme.aurora-light': 'オーロラ（ライト）',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': '動画上の字幕',
+  'shot.btn': 'スクリーンショットを撮る',
+  'shot.title': 'スクリーンショット',
+  'shot.copy': 'クリップボードにコピー',
+  'shot.copied': 'コピーしました',
+  'shot.download': 'PNG をダウンロード',
+  'shot.delete': '削除',
+  'shot.copyFailed': 'クリップボードにコピーできません — 画像をダウンロードしてください',
+  'media.expand': '動画を拡大して AI パネルを隠す',
+  'media.shrink': 'AI パネルを再表示',
+  'run.details': '詳細',
 }
 
 export default ja
