@@ -116,6 +116,87 @@
     --glow-2: 150 12% 45%;
   }
 
+  /* ── Aurora: «жидкое стекло» поверх мягкого градиентного свечения. Тема по умолчанию ── */
+  [data-theme='aurora'] {
+    color-scheme: dark;
+    --background: 252 45% 6%;
+    --foreground: 250 30% 96%;
+    --card: 252 35% 11%;
+    --card-foreground: 250 30% 96%;
+    --popover: 252 38% 11%;
+    --popover-foreground: 250 30% 96%;
+    --primary: 258 95% 74%;
+    --primary-foreground: 252 50% 8%;
+    --secondary: 252 30% 16%;
+    --secondary-foreground: 250 30% 92%;
+    --muted: 252 28% 15%;
+    --muted-foreground: 250 16% 68%;
+    --accent: 258 55% 24%;
+    --accent-foreground: 258 95% 84%;
+    --destructive: 350 85% 66%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 252 30% 24%;
+    --input: 252 30% 26%;
+    --ring: 258 95% 74%;
+    --radius: 1.1rem;
+
+    --ok: 158 72% 56%;
+    --warn: 38 95% 64%;
+    --err: 350 88% 70%;
+    --track: 252 28% 28%;
+    --inset: 252 45% 5%;
+    --panel-from: 252 38% 15%;
+    --panel-to: 252 38% 11%;
+    --header-bg: 252 45% 7%;
+    --scanline: 252 45% 3%;
+    --row-hover: 252 40% 100% / 0.05;
+    --glow-1: 262 92% 62%;
+    --glow-2: 192 92% 52%;
+    --glow-3: 328 88% 60%;
+    --glass-edge: 0 0% 100% / 0.1;
+    --glass-shadow: 252 80% 2% / 0.7;
+  }
+
+  [data-theme='aurora-light'] {
+    color-scheme: light;
+    --background: 250 60% 97%;
+    --foreground: 252 40% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 252 40% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 252 40% 14%;
+    --primary: 258 82% 54%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 250 40% 94%;
+    --secondary-foreground: 252 35% 20%;
+    --muted: 250 36% 94%;
+    --muted-foreground: 252 14% 42%;
+    --accent: 258 80% 94%;
+    --accent-foreground: 258 70% 38%;
+    --destructive: 350 78% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 252 30% 86%;
+    --input: 252 30% 84%;
+    --ring: 258 82% 56%;
+    --radius: 1.1rem;
+
+    --ok: 158 70% 32%;
+    --warn: 34 92% 42%;
+    --err: 350 76% 48%;
+    --track: 252 25% 82%;
+    --inset: 250 45% 96%;
+    --panel-from: 0 0% 100%;
+    --panel-to: 250 50% 98%;
+    --header-bg: 250 60% 98%;
+    --scanline: 252 30% 90%;
+    --row-hover: 258 70% 55% / 0.07;
+    --glow-1: 262 95% 76%;
+    --glow-2: 192 95% 68%;
+    --glow-3: 328 92% 80%;
+    --glass-edge: 0 0% 100% / 0.8;
+    --glass-shadow: 258 50% 40% / 0.18;
+  }
+
   * {
     border-color: hsl(var(--border));
   }
@@ -233,6 +314,71 @@
     background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.14), transparent);
     animation: scan 1.6s linear infinite;
     pointer-events: none;
+  }
+
+  /* Aurora: стекло, мягкие формы и обычный шрифт интерфейса вместо «консольного» */
+  [data-theme^='aurora'] body {
+    background-image:
+      radial-gradient(62rem 42rem at 10% -12%, hsl(var(--glow-1) / 0.34), transparent 62%),
+      radial-gradient(52rem 38rem at 96% 2%, hsl(var(--glow-2) / 0.2), transparent 58%),
+      radial-gradient(50rem 40rem at 52% 118%, hsl(var(--glow-3) / 0.2), transparent 62%);
+  }
+  [data-theme='aurora-light'] body {
+    background-image:
+      radial-gradient(62rem 42rem at 10% -12%, hsl(var(--glow-1) / 0.4), transparent 62%),
+      radial-gradient(52rem 38rem at 96% 2%, hsl(var(--glow-2) / 0.3), transparent 58%),
+      radial-gradient(50rem 40rem at 52% 118%, hsl(var(--glow-3) / 0.3), transparent 62%);
+  }
+  [data-theme^='aurora'] body::after {
+    display: none;
+  }
+  [data-theme^='aurora'] header {
+    background: hsl(var(--header-bg) / 0.62);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    backdrop-filter: blur(18px) saturate(150%);
+  }
+  [data-theme^='aurora'] .panel {
+    background: linear-gradient(180deg, hsl(var(--panel-from) / 0.62), hsl(var(--panel-to) / 0.5));
+    border: 1px solid hsl(var(--glass-edge));
+    border-radius: var(--radius);
+    -webkit-backdrop-filter: blur(26px) saturate(165%);
+    backdrop-filter: blur(26px) saturate(165%);
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.07) inset,
+      0 24px 48px -28px hsl(var(--glass-shadow));
+  }
+  [data-theme='aurora-light'] .panel {
+    background: linear-gradient(180deg, hsl(var(--panel-from) / 0.74), hsl(var(--panel-to) / 0.6));
+  }
+  [data-theme^='aurora'] .panel-inset {
+    background: hsl(var(--inset) / 0.5);
+    border: 1px solid hsl(var(--glass-edge));
+    border-radius: calc(var(--radius) - 0.25rem);
+  }
+  [data-theme='aurora-light'] .panel-inset {
+    background: hsl(var(--inset) / 0.7);
+    border-color: hsl(var(--border));
+  }
+  [data-theme^='aurora'] .btn-console {
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 999px;
+  }
+  [data-theme^='aurora'] .chrome-label {
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    font-size: 12px !important;
+    font-weight: 500;
+  }
+  [data-theme^='aurora'] ::-webkit-scrollbar-thumb {
+    background: hsl(var(--foreground) / 0.18);
+  }
+  [data-theme^='aurora'] .scanline-active::before {
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.18), transparent);
   }
 }
 

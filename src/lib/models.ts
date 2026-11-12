@@ -71,6 +71,8 @@ export interface AiAction {
   /** i18n-ключ названия кнопки */
   labelKey: string
   prompt: string
+  /** свободный ответ (краткое содержание, задачи): результат — не расшифровка */
+  free?: boolean
 }
 
 // Промпты встроенных кнопок — на английском и без привязки к языку: модель
@@ -93,6 +95,7 @@ export const AI_ACTIONS: AiAction[] = [
     labelKey: 'ai.act.summary',
     prompt:
       'Write a short summary of this transcript: 3–7 bullet points with the main ideas. Answer in the language of the transcript. Return only the list.',
+    free: true,
   },
   {
     id: 'fixup',
@@ -105,6 +108,7 @@ export const AI_ACTIONS: AiAction[] = [
     labelKey: 'ai.act.tasks',
     prompt:
       'Extract all assignments and agreements from this transcript. Format of each item: who — what to do — deadline (if mentioned). If there are none, say so in one line. Answer in the language of the transcript. Return only the list.',
+    free: true,
   },
 ]
 

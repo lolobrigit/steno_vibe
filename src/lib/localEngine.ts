@@ -14,7 +14,7 @@ type WorkerEvent =
 
 export interface LocalEngineCallbacks {
   /** этап подготовки: скачивание файлов или инициализация (с устройством) */
-  onStage?: (stage: 'download' | 'init', device: 'webgpu' | 'wasm') => void
+  onStage?: (stage: 'storage' | 'download' | 'init', device: 'webgpu' | 'wasm') => void
   /** процент самого распознавания (по обработанным чанкам), 0..99 */
   onProgress?: (pct: number) => void
 }

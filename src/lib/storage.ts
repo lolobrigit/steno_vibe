@@ -1,5 +1,6 @@
 import type { CloudProvider, HistoryItem } from '@/types'
 import { deleteAudio } from './audioStore'
+import { deleteVersions } from './versionStore'
 
 const KEYS = 'steno.keys.v1'
 const HISTORY = 'steno.history.v1'
@@ -22,7 +23,10 @@ export function saveKeys(keys: ApiKeys) {
   localStorage.setItem(KEYS, JSON.stringify(keys))
 }
 
-export type ThemeName = 'dark' | 'light' | 'neutral'
+/** aurora — «жидкое стекло», тема по умолчанию; остальные — прежние */
+export type ThemeName = 'aurora' | 'aurora-light' | 'dark' | 'light' | 'neutral'
+
+export const DEFAULT_THEME: ThemeName = 'aurora'
 
 export interface AppSettings {
   mode: 'local' | 'cloud'
@@ -33,6 +37,8 @@ export interface AppSettings {
   diarize: boolean
   silenceStop: boolean
   theme: ThemeName
+  /** пользователь сам выбрал тему (иначе действует тема по умолчанию) */
+  themeChosen?: boolean
   /** язык интерфейса (ISO-639-1), по умолчанию английский */
   uiLang: string
   /** справочники (id), чьи термины улетают в Whisper (initial_prompt) и LLM */
@@ -53,6 +59,8 @@ export interface LlmButton {
   prompt: string
   /** id справочника, чьи термины подмешиваются в промпт */
   glossaryId?: string | null
+  /** свободный ответ (краткое содержание, задачи): результат — не расшифровка */
+  free?: boolean
 }
 
 /** Локальная LLM, доступная для выбора в настройках. */
@@ -79,7 +87,7 @@ const DEFAULTS: AppSettings = {
   translate: false,
   diarize: true,
   silenceStop: true,
-  theme: 'dark',
+  theme: DEFAULT_THEME,
   uiLang: 'en',
   glossaryIds: [],
 }
@@ -87,7 +95,12 @@ const DEFAULTS: AppSettings = {
 export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS)
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) }
+    if (raw) {
+      const saved = { ...DEFAULTS, ...JSON.parse(raw) } as AppSettings
+      // прежняя тема по умолчанию («dark») не была осознанным выбором — переводим на новую
+      if (!saved.themeChosen) saved.theme = DEFAULT_THEME
+      return saved
+    }
   } catch {
     /* ignore */
   }
@@ -111,7 +124,11 @@ export function loadHistory(): HistoryItem[] {
 /** Аудио вытесненных из истории записей удаляем — иначе оно копится в IndexedDB без владельца. */
 function dropEvicted(before: HistoryItem[], after: HistoryItem[]) {
   const kept = new Set(after.map((i) => i.id))
-  for (const i of before) if (!kept.has(i.id) && i.hasAudio) void deleteAudio(i.id)
+  for (const i of before) {
+    if (kept.has(i.id)) continue
+    if (i.hasAudio) void deleteAudio(i.id)
+    void deleteVersions(i.id)
+  }
 }
 
 export function addHistory(item: HistoryItem): HistoryItem[] {
@@ -132,7 +149,22 @@ export function addHistory(item: HistoryItem): HistoryItem[] {
   return list
 }
 
+/** Импорт проектов: добавляет записи в начало списка, не вытесняя существующие (до IMPORT_LIMIT). */
+const IMPORT_LIMIT = 60
+export function addHistoryMany(items: HistoryItem[]): HistoryItem[] {
+  const all = [...items, ...loadHistory()]
+  const list = all.slice(0, IMPORT_LIMIT)
+  try {
+    localStorage.setItem(HISTORY, JSON.stringify(list))
+  } catch {
+    return loadHistory()
+  }
+  dropEvicted(all, list)
+  return list
+}
+
 export function removeHistory(id: string): HistoryItem[] {
+  void deleteVersions(id)
   const list = loadHistory().filter((i) => i.id !== id)
   localStorage.setItem(HISTORY, JSON.stringify(list))
   return list

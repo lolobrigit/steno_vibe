@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Play, RotateCcw, Square } from 'lucide-react'
+import { Rail, type Flyout } from '@/sections/Rail'
+import { ProjectsModal } from '@/sections/ProjectsModal'
+import { useTranscriptDoc } from '@/hooks/useTranscriptDoc'
+import { AiPanel, type AiApply } from '@/sections/AiPanel'
+import { joinWithPrevious, mergeSpeakerNames, mergeSpeakers, nextSpeakerId, NEW_SPEAKER, splitSegment, versionNumber } from '@/lib/transcript'
 import { Header } from '@/sections/Header'
 import { SourcePanel } from '@/sections/SourcePanel'
 import { EnginePanel } from '@/sections/EnginePanel'
 import { TranscriptView } from '@/sections/TranscriptView'
-import { AiPanel } from '@/sections/AiPanel'
 import { HistoryPanel, StoragePanel } from '@/sections/Panels'
 import { SettingsModal } from '@/sections/SettingsModal'
 import { FileConfirmModal } from '@/sections/FileConfirmModal'
@@ -44,13 +48,12 @@ import {
   saveGlossaries,
   saveKeys,
   saveSettings,
-  updateHistory,
 } from '@/lib/storage'
 import { useRecorder, type RecordSource } from '@/hooks/useRecorder'
 import { useFolderWatch } from '@/hooks/useFolderWatch'
 import { useDownloads } from '@/hooks/useDownloads'
 import { getLanguage, initialLanguage, setLanguage, t, useT } from '@/i18n'
-import type { QueueItem, TranscriptResult, TranscribePhase } from '@/types'
+import type { HistoryItem, QueueItem, TranscriptResult, TranscribePhase } from '@/types'
 
 interface AudioSource {
   blob: Blob
@@ -90,10 +93,13 @@ export default function Home() {
   const [audio, setAudio] = useState<AudioSource | null>(null)
   const [phase, setPhase] = useState<TranscribePhase>('idle')
   const [statusText, setStatusText] = useState('')
-  const [result, setResult] = useState<TranscriptResult | null>(null)
+  /** документ расшифровки: версии записи; показываем активную */
+  const doc = useTranscriptDoc(setHistory)
+  const { result, speakerNames } = doc
   const [resultName, setResultName] = useState('transcript')
-  /** переименования спикеров для текущего результата */
-  const [speakerNames, setSpeakerNames] = useState<Record<string, string>>({})
+  const [flyout, setFlyout] = useState<Flyout | null>(null)
+  const [projectsOpen, setProjectsOpen] = useState(false)
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [queue, setQueue] = useState<QueueItem[]>([])
@@ -107,6 +113,18 @@ export default function Home() {
   const abortRef = useRef<AbortController | null>(null)
   const resultRef = useRef<TranscriptResult | null>(null)
   resultRef.current = result
+
+  // адрес для просмотра загруженного видео прямо в блоке «Источник»
+  const audioBlobRef = audio?.blob
+  useEffect(() => {
+    if (!audioBlobRef) {
+      setMediaUrl(null)
+      return
+    }
+    const u = URL.createObjectURL(audioBlobRef)
+    setMediaUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [audioBlobRef])
   const downloads = useDownloads()
 
   // единый API списка задач: этапы транскрипции пишет Home, LLM — AiPanel
@@ -260,8 +278,7 @@ export default function Home() {
   /** Файл попадает в историю сразу при загрузке (вместе с аудио). */
   const ingestBlob = useCallback(
     async (blob: Blob, name: string) => {
-      setResult(null)
-      setSpeakerNames({})
+      doc.reset()
       setError(null)
       setPhase('idle')
       setStatusText('')
@@ -274,6 +291,7 @@ export default function Home() {
           task: taskApi,
         })
         const id = crypto.randomUUID()
+        doc.reset(id)
         void saveAudio(id, blob, name)
         // сконвертированный вариант тоже кладём в хранилище: при повторном
         // открытии из истории декодируем WAV нативно, без ffmpeg
@@ -303,7 +321,7 @@ export default function Home() {
         setPendingFile(null)
       }
     },
-    [decodeSmart, taskApi],
+    [decodeSmart, taskApi, doc],
   )
 
   const recorder = useRecorder(
@@ -325,7 +343,7 @@ export default function Home() {
   )
 
   const pushHistory = useCallback(
-    (res: TranscriptResult, sourceName: string, language: string, blob?: Blob) => {
+    (res: TranscriptResult, sourceName: string, language: string, blob?: Blob): string => {
       const id = crypto.randomUUID()
       if (blob) void saveAudio(id, blob, sourceName)
       setHistory(
@@ -343,6 +361,7 @@ export default function Home() {
           hasAudio: !!blob,
         }),
       )
+      return id
     },
     [],
   )
@@ -361,7 +380,7 @@ export default function Home() {
           onStage: (stage) =>
             ui?.task?.update('dia', {
               pct: stage === 'analyze' ? 0 : null,
-              detail: t(stage === 'analyze' ? 'task.d.analyze' : 'task.d.downloadModels'),
+              detail: t(stage === 'analyze' ? 'task.d.analyze' : 'task.d.prepareModels'),
             }),
           onProgress: (p) => ui?.task?.update('dia', { pct: p }),
         },
@@ -429,13 +448,17 @@ export default function Home() {
       if (settings.mode === 'local') {
         if (!decoded) throw new Error(t('err.cannotDecode', { name }))
         ui?.phase('loading-model')
-        ui?.status(t('st.preparingModel'))
+        ui?.status(t('st.checkingStorage'))
         ui?.task?.start('model', t('task.model'), localModel.label)
         await loadLocalModel(
           localModel,
           {
             onStage: (stage, dev) => {
-              if (stage === 'download') {
+              if (stage === 'storage') {
+                // модель уже есть в браузере — сеть не нужна
+                ui?.status(t('st.loadingFromStorage'))
+                ui?.task?.update('model', { detail: t('task.d.fromStorage') })
+              } else if (stage === 'download') {
                 ui?.status(t('st.downloadingModel'))
               } else {
                 ui?.status(t('st.initModel', { device: deviceLabel(dev) }))
@@ -551,26 +574,25 @@ export default function Home() {
         { phase: setPhase, status: setStatusText, task: taskApi },
         ctl.signal,
       )
-      setResult(res)
-      setSpeakerNames({})
       setResultName(audio.name)
-      if (audio.historyId) {
-        // файл уже в истории — дополняем его запись транскрипцией
-        setHistory(
-          updateHistory(audio.historyId, {
-            engineLabel: res.engineLabel,
-            modelLabel: res.modelLabel,
-            language,
-            durationSec: res.durationSec,
-            elapsedSec: res.elapsedSec,
-            text: res.text,
-            segments: res.segments,
-            speakerNames: {},
-          }),
-        )
-      } else {
-        pushHistory(res, audio.name, language, audio.blob)
-      }
+      // запись истории существует с момента загрузки файла; иначе создаём её сейчас
+      const hid = audio.historyId ?? pushHistory(res, audio.name, language, audio.blob)
+      if (!audio.historyId) setAudio((a) => (a ? { ...a, historyId: hid } : a))
+      doc.addVersion(
+        {
+          kind: 'asr',
+          label: res.modelLabel || res.engineLabel,
+          text: res.text,
+          segments: res.segments,
+          speakerNames: {},
+          language,
+          durationSec: res.durationSec,
+          elapsedSec: res.elapsedSec,
+          engineLabel: res.engineLabel,
+          modelLabel: res.modelLabel,
+        },
+        hid,
+      )
       setPhase('done')
     } catch (e) {
       if (isAbort(e) || ctl.signal.aborted) {
@@ -586,7 +608,7 @@ export default function Home() {
       if (abortRef.current === ctl) abortRef.current = null
       setStatusText('')
     }
-  }, [audio, runTranscription, pushHistory, taskApi])
+  }, [audio, runTranscription, pushHistory, taskApi, doc])
 
   /** Кнопка «Отмена»: прерывает скачивание модели, распознавание и диаризацию. */
   const cancelTranscription = useCallback(() => {
@@ -639,30 +661,23 @@ export default function Home() {
 
   const clearAll = useCallback(() => {
     setAudio(null)
-    setResult(null)
-    setSpeakerNames({})
+    doc.reset()
     setError(null)
     setPhase('idle')
+    setFlyout(null)
     taskApi.reset()
-  }, [taskApi])
+  }, [taskApi, doc])
 
   const openHistory = useCallback(
-    (item: (typeof history)[number]) => {
+    (item: HistoryItem) => {
       setError(null)
+      setFlyout(null)
       setResultName(item.sourceName)
-      setSpeakerNames(item.speakerNames ?? {})
+      doc.reset(item.id)
       if (item.text) {
-        setResult({
-          text: item.text,
-          segments: item.segments,
-          durationSec: item.durationSec,
-          elapsedSec: item.elapsedSec,
-          engineLabel: item.engineLabel,
-          modelLabel: item.modelLabel,
-        })
+        void doc.open(item)
         setPhase('done')
       } else {
-        setResult(null)
         setPhase('idle')
       }
       // подтягиваем сохранённое аудио, чтобы можно было распознать/переслушать
@@ -700,37 +715,111 @@ export default function Home() {
         setAudio(null)
       }
     },
-    [decodeSmart, taskApi],
+    [decodeSmart, taskApi, doc],
   )
 
-  const removeHistoryEntry = useCallback((id: string) => {
-    void deleteAudio(id)
-    setHistory(removeHistory(id))
-  }, [])
+  const removeHistoryEntry = useCallback(
+    (id: string) => {
+      void deleteAudio(id)
+      setHistory(removeHistory(id))
+      // удалили открытую запись — возвращаемся на стартовый экран
+      if (audio?.historyId === id) clearAll()
+    },
+    [audio?.historyId, clearAll],
+  )
 
   /** Переименование спикера: имя хранится отдельно, сегменты не трогаем. */
   const renameSpeaker = useCallback(
-    (speaker: string, name: string) => {
-      const next = { ...speakerNames }
-      if (name.trim()) next[speaker] = name.trim()
-      else delete next[speaker]
-      setSpeakerNames(next)
-      if (audio?.historyId) setHistory(updateHistory(audio.historyId, { speakerNames: next }))
-    },
-    [audio?.historyId, speakerNames],
+    (speaker: string, name: string) =>
+      doc.update((v) => {
+        const names = { ...v.speakerNames }
+        if (name.trim()) names[speaker] = name.trim()
+        else delete names[speaker]
+        return { ...v, speakerNames: names }
+      }),
+    [doc],
   )
 
   /** Ручное переназначение спикера у реплики (если диаризация ошиблась). */
   const reassignSegment = useCallback(
-    (index: number, speaker: string) => {
-      const r = resultRef.current
-      if (!r) return
-      const segments = r.segments.map((s, i) => (i === index ? { ...s, speaker } : s))
-      setResult({ ...r, segments })
-      if (audio?.historyId) setHistory(updateHistory(audio.historyId, { segments }))
-    },
-    [audio?.historyId],
+    (index: number, speaker: string) =>
+      doc.update((v) => ({
+        ...v,
+        segments: v.segments.map((s, i) => (i === index ? { ...s, speaker } : s)),
+      })),
+    [doc],
   )
+
+  /** Объединить двух спикеров в расшифровке. */
+  const mergeSpeakersInDoc = useCallback(
+    (from: string, into: string) =>
+      doc.update((v) => ({
+        ...v,
+        segments: mergeSpeakers(v.segments, from, into),
+        speakerNames: mergeSpeakerNames(v.speakerNames, from, into),
+      })),
+    [doc],
+  )
+
+  /** Разделить длинную реплику: вторая часть — другому (или новому) спикеру. */
+  const splitInDoc = useCallback(
+    (index: number, offset: number, speaker: string) =>
+      doc.update((v) => {
+        const sp = speaker === NEW_SPEAKER ? nextSpeakerId(v.segments) : speaker
+        const segments = splitSegment(v.segments, index, offset, sp)
+        return segments === v.segments ? v : { ...v, segments }
+      }),
+    [doc],
+  )
+
+  const joinInDoc = useCallback(
+    (index: number) =>
+      doc.update((v) => {
+        const segments = joinWithPrevious(v.segments, index)
+        return segments === v.segments ? v : { ...v, segments }
+      }),
+    [doc],
+  )
+
+  /** Результат LLM — новая версия расшифровки (исходная остаётся). */
+  const applyAi = useCallback(
+    (a: AiApply) => {
+      const base = doc.active
+      if (!base) return
+      doc.addVersion({
+        kind: 'llm',
+        label: a.label,
+        parentId: base.id,
+        text: a.text,
+        segments: a.segments,
+        speakerNames: { ...base.speakerNames, ...a.newNames },
+        language: base.language,
+        durationSec: base.durationSec,
+        elapsedSec: base.elapsedSec,
+        engineLabel: base.engineLabel,
+        modelLabel: a.model || base.modelLabel,
+      })
+    },
+    [doc],
+  )
+
+  const duplicateVersion = useCallback(() => {
+    const base = doc.active
+    if (!base) return
+    doc.addVersion({
+      kind: 'edit',
+      label: base.label,
+      parentId: base.id,
+      text: base.text,
+      segments: base.segments,
+      speakerNames: base.speakerNames,
+      language: base.language,
+      durationSec: base.durationSec,
+      elapsedSec: base.elapsedSec,
+      engineLabel: base.engineLabel,
+      modelLabel: base.modelLabel,
+    })
+  }, [doc])
 
   // доля скачивания модели — для полосы на волне
   const loadFraction =
@@ -779,14 +868,181 @@ export default function Home() {
     if (!fileLoading) setPendingFile(null)
   }, [fileLoading])
 
+  const stage: 'start' | 'prepare' | 'work' = recorder.recording
+    ? 'prepare'
+    : result || busy || error
+      ? 'work'
+      : audio || fileLoading
+        ? 'prepare'
+        : 'start'
+
+  const sourcePanel = (
+    <SourcePanel
+      fileName={audio?.name ?? null}
+      fileSize={audio ? audio.blob.size : null}
+      durationSec={audio?.decoded?.durationSec ?? null}
+      decodeError={audio?.decodeError ?? null}
+      recording={recorder.recording}
+      recSource={recorder.source}
+      recElapsed={recorder.elapsed}
+      recError={recorder.error}
+      recPreview={recorder.preview}
+      media={
+        stage === 'prepare' && mediaUrl && audio
+          ? { url: mediaUrl, kind: audio.blob.type.startsWith('video') ? 'video' : 'audio' }
+          : null
+      }
+      micMixed={recorder.micMixed}
+      busy={busy || queueBusy}
+      silenceStop={settings.silenceStop}
+      folder={{
+        supported: folder.supported,
+        folderName: folder.folderName,
+        watching: folder.watching,
+        error: folder.error,
+      }}
+      queue={queue}
+      fileLoading={fileLoading}
+      onFile={requestFile}
+      onStartRec={startRec}
+      onStopRec={recorder.stop}
+      onClear={clearAll}
+      onToggleSilence={() => setSettings((s) => ({ ...s, silenceStop: !s.silenceStop }))}
+      onPickFolder={() => void folder.pick()}
+      onStopFolder={folder.stop}
+      onClearQueueFinished={() =>
+        setQueue((qs) => qs.filter((q) => q.status === 'pending' || q.status === 'processing'))
+      }
+    />
+  )
+
+  const enginePanel = (
+    <EnginePanel
+      settings={settings}
+      keys={keys}
+      endpoints={endpoints}
+      hasWebGPU={hasWebGPU()}
+      decodeFailed={!!audio?.decodeError}
+      busy={busy || queueBusy}
+      glossaries={glossaries}
+      onSettings={setSettings}
+      onKeys={setKeys}
+      onOpenSettings={() => setSettingsOpen(true)}
+    />
+  )
+
+  const historyPanel = (
+    <HistoryPanel
+      items={history}
+      onOpen={openHistory}
+      onRemove={removeHistoryEntry}
+      onProjects={() => setProjectsOpen(true)}
+    />
+  )
+
+  /** Запуск: кнопки, статус, список задач, ошибка. */
+  const runBar = (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => void transcribe()}
+          disabled={!canRun}
+          className="btn-console px-6 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] font-semibold hover:brightness-110 active:scale-[0.98] disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:brightness-100"
+        >
+          <Play className="size-4" aria-hidden="true" />
+          {tr('main.transcribe')}
+        </button>
+
+        {(busy || queueBusy) && (
+          <button
+            type="button"
+            onClick={cancelTranscription}
+            className="btn-console px-4 border bg-[hsl(var(--err)/0.1)] border-[hsl(var(--err)/0.5)] text-[hsl(var(--err))] hover:bg-[hsl(var(--err)/0.18)]"
+          >
+            <Square className="size-3.5" aria-hidden="true" />
+            {tr('common.cancel')}
+          </button>
+        )}
+
+        {busy && (
+          <span className="font-mono text-[12px] tabular-nums" style={{ color: 'hsl(var(--primary))' }}>
+            {statusText} · {formatDurationShort(elapsed)}
+          </span>
+        )}
+        {phase === 'loading-model' && loadFraction !== undefined && (
+          <span className="font-mono text-[12px] tabular-nums" style={{ color: 'hsl(var(--warn))' }}>
+            {Math.floor(loadFraction * 100)}%
+          </span>
+        )}
+        {queueBusy && !busy && (
+          <span className="font-mono text-[12px]" style={{ color: 'hsl(var(--warn))' }}>
+            {tr('main.queueBusy')}
+            {statusText ? ` · ${statusText}` : ''}
+          </span>
+        )}
+        {!busy && !queueBusy && !audio && (
+          <span className="text-sm text-muted-foreground">{tr('main.hint')}</span>
+        )}
+        {!busy && audio && settings.mode === 'cloud' && !cloudReady && (
+          <span className="text-sm" style={{ color: 'hsl(var(--warn))' }}>
+            {tr('main.needKey', { provider: PROVIDER_INFO[cloudModel.provider].label })}
+          </span>
+        )}
+      </div>
+
+      <TaskList tasks={tasks} />
+
+      {error && (
+        <div
+          role="alert"
+          className="border-l-2 bg-[hsl(var(--err)/0.08)] px-3 py-2.5 flex items-start gap-2.5 rounded-r-lg"
+          style={{ borderColor: 'hsl(var(--err))' }}
+        >
+          <AlertTriangle
+            className="size-4 mt-0.5 shrink-0"
+            style={{ color: 'hsl(var(--err))' }}
+            aria-hidden="true"
+          />
+          <div className="min-w-0">
+            <p className="text-sm text-foreground/90 break-words">{error}</p>
+            <button
+              type="button"
+              onClick={() => void transcribe()}
+              className="btn-console !min-h-8 mt-1.5 px-2 hover:text-foreground"
+              style={{ color: 'hsl(var(--primary))' }}
+            >
+              <RotateCcw className="size-3.5" aria-hidden="true" />
+              {tr('common.retry')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  const wave = (height: number) => (
+    <div className={`panel-inset px-3 py-2 ${phase === 'transcribing' ? 'scanline-active' : ''}`}>
+      <Waveform
+        levels={waveLevels}
+        live={recorder.recording}
+        progress={phase === 'loading-model' ? (loadFraction ?? 0) : undefined}
+        height={height}
+      />
+    </div>
+  )
+
+  const showAi = !!result && phase === 'done' && !busy
+  const activeVersionNo = doc.activeId ? versionNumber(doc.versions, doc.activeId) : 1
+
   return (
-    <div className="min-h-100dvh flex flex-col">
+    <div className={`flex flex-col min-h-dvh ${stage === 'work' ? 'lg:h-dvh lg:overflow-hidden' : ''}`}>
       <Header
         status={headerStatus}
         mode={settings.mode}
         deviceLabel={localDeviceLabel()}
         theme={settings.theme}
-        onTheme={(theme) => setSettings((s) => ({ ...s, theme }))}
+        onTheme={(theme) => setSettings((s) => ({ ...s, theme, themeChosen: true }))}
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
@@ -807,193 +1063,127 @@ export default function Home() {
         onConfirm={confirmFile}
         onCancel={cancelFile}
       />
+      {projectsOpen && (
+        <ProjectsModal
+          items={history}
+          currentId={audio?.historyId ?? null}
+          onClose={() => setProjectsOpen(false)}
+          onImported={setHistory}
+        />
+      )}
 
-      <main className="flex-1 w-full max-w-[1560px] mx-auto px-4 py-4 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)_330px] items-start">
-        {/* Левая колонка */}
-        <div className="flex flex-col gap-4 min-w-0">
-          <SourcePanel
-            fileName={audio?.name ?? null}
-            fileSize={audio ? audio.blob.size : null}
-            durationSec={audio?.decoded?.durationSec ?? null}
-            decodeError={audio?.decodeError ?? null}
-            recording={recorder.recording}
-            recSource={recorder.source}
-            recElapsed={recorder.elapsed}
-            recError={recorder.error}
-            recPreview={recorder.preview}
-            micMixed={recorder.micMixed}
-            busy={busy || queueBusy}
-            silenceStop={settings.silenceStop}
-            folder={{
-              supported: folder.supported,
-              folderName: folder.folderName,
-              watching: folder.watching,
-              error: folder.error,
-            }}
-            queue={queue}
-            fileLoading={fileLoading}
-            onFile={requestFile}
-            onStartRec={startRec}
-            onStopRec={recorder.stop}
-            onClear={clearAll}
-            onToggleSilence={() => setSettings((s) => ({ ...s, silenceStop: !s.silenceStop }))}
-            onPickFolder={() => void folder.pick()}
-            onStopFolder={folder.stop}
-            onClearQueueFinished={() =>
-              setQueue((qs) => qs.filter((q) => q.status === 'pending' || q.status === 'processing'))
+      {stage !== 'work' ? (
+        // Старт и подготовка: всё по центру, блоки появляются по шагам — Источник → Движок → Запуск
+        <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 flex flex-col gap-4 min-w-0">
+          {stage === 'start' && (
+            <h1 className="text-center text-xl md:text-2xl font-semibold tracking-tight pt-2 pb-1">
+              {tr('start.title')}
+              <span className="block text-sm font-normal text-muted-foreground mt-1">
+                {tr('start.subtitle')}
+              </span>
+            </h1>
+          )}
+          {sourcePanel}
+          {stage === 'prepare' && (
+            <>
+              {enginePanel}
+              <section className="panel p-4 flex flex-col gap-4" aria-label={tr('main.aria')}>
+                {wave(72)}
+                {runBar}
+              </section>
+            </>
+          )}
+          {stage === 'start' && (
+            <div className="grid gap-4 md:grid-cols-2 items-start">
+              {historyPanel}
+              <StoragePanel />
+            </div>
+          )}
+        </main>
+      ) : (
+        // Работа с расшифровкой: рейка + плеер/текст + LLM, всё в пределах экрана
+        <main className="flex-1 min-h-0 w-full max-w-[1760px] mx-auto px-4 py-4 grid gap-4 grid-cols-1 lg:grid-cols-[56px_minmax(0,1fr)_minmax(340px,430px)] lg:overflow-hidden">
+          <Rail
+            open={flyout}
+            onOpen={setFlyout}
+            onNew={clearAll}
+            onProjects={() => setProjectsOpen(true)}
+            busy={busy}
+            flyout={
+              flyout === 'source'
+                ? sourcePanel
+                : flyout === 'engine'
+                  ? enginePanel
+                  : flyout === 'history'
+                    ? historyPanel
+                    : flyout === 'storage'
+                      ? <StoragePanel />
+                      : null
             }
           />
-          <EnginePanel
-            settings={settings}
-            keys={keys}
-            endpoints={endpoints}
-            hasWebGPU={hasWebGPU()}
-            decodeFailed={!!audio?.decodeError}
-            busy={busy || queueBusy}
-            glossaries={glossaries}
-            onSettings={setSettings}
-            onKeys={setKeys}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
-        </div>
 
-        {/* Центр: волна + запуск + результат + AI */}
-        <div className="flex flex-col gap-4 min-w-0">
-          <section className="panel p-4 md:p-5 flex flex-col gap-4" aria-label={tr('main.aria')}>
-            <div
-              className={`panel-inset px-3 py-2 ${phase === 'transcribing' ? 'scanline-active' : ''}`}
-            >
-              <Waveform
-                levels={waveLevels}
-                live={recorder.recording}
-                progress={phase === 'loading-model' ? (loadFraction ?? 0) : undefined}
-                height={96}
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => void transcribe()}
-                disabled={!canRun}
-                className="btn-console px-6 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] font-semibold hover:brightness-110 active:scale-[0.98] disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:brightness-100"
-              >
-                <Play className="size-4" aria-hidden="true" />
-                {tr('main.transcribe')}
-              </button>
-
-              {(busy || queueBusy) && (
-                <button
-                  type="button"
-                  onClick={cancelTranscription}
-                  className="btn-console px-4 border bg-[hsl(var(--err)/0.1)] border-[hsl(var(--err)/0.5)] text-[hsl(var(--err))] hover:bg-[hsl(var(--err)/0.18)]"
-                >
-                  <Square className="size-3.5" aria-hidden="true" />
-                  {tr('common.cancel')}
-                </button>
-              )}
-
-              {busy && (
-                <span
-                  className="font-mono text-[12px] tabular-nums"
-                  style={{ color: 'hsl(var(--primary))' }}
-                >
-                  {statusText} · {formatDurationShort(elapsed)}
-                </span>
-              )}
-              {phase === 'loading-model' && loadFraction !== undefined && (
-                <span
-                  className="font-mono text-[12px] tabular-nums"
-                  style={{ color: 'hsl(var(--warn))' }}
-                >
-                  {Math.floor(loadFraction * 100)}%
-                </span>
-              )}
-              {queueBusy && !busy && (
-                <span className="font-mono text-[12px]" style={{ color: 'hsl(var(--warn))' }}>
-                  {tr('main.queueBusy')}
-                  {statusText ? ` · ${statusText}` : ''}
-                </span>
-              )}
-              {!busy && !queueBusy && !audio && (
-                <span className="text-sm text-muted-foreground">{tr('main.hint')}</span>
-              )}
-              {!busy && audio && settings.mode === 'cloud' && !cloudReady && (
-                <span className="text-sm" style={{ color: 'hsl(var(--warn))' }}>
-                  {tr('main.needKey', { provider: PROVIDER_INFO[cloudModel.provider].label })}
-                </span>
-              )}
-            </div>
-
-            <TaskList tasks={tasks} />
-
-            {error && (
-              <div
-                role="alert"
-                className="border-l-2 bg-[hsl(var(--err)/0.08)] px-3 py-2.5 flex items-start gap-2.5"
-                style={{ borderColor: 'hsl(var(--err))' }}
-              >
-                <AlertTriangle
-                  className="size-4 mt-0.5 shrink-0"
-                  style={{ color: 'hsl(var(--err))' }}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0">
-                  <p className="text-sm text-foreground/90 break-words">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => void transcribe()}
-                    className="btn-console !min-h-8 mt-1.5 px-2 hover:text-foreground"
-                    style={{ color: 'hsl(var(--primary))' }}
-                  >
-                    <RotateCcw className="size-3.5" aria-hidden="true" />
-                    {tr('common.retry')}
-                  </button>
-                </div>
-              </div>
-            )}
-
+          <section
+            className="panel p-3 md:p-4 flex flex-col gap-3 min-w-0 min-h-0 lg:h-full"
+            aria-label={tr('main.aria')}
+          >
+            {(!result || busy) && wave(56)}
+            {runBar}
             {result && (phase === 'done' || busy) && (
               <div
-                className={
+                className={`flex-1 min-h-0 min-h-[60dvh] lg:min-h-0 ${
                   busy
                     ? 'opacity-40 saturate-50 pointer-events-none transition-opacity duration-300'
                     : 'transition-opacity duration-300'
-                }
+                }`}
                 aria-busy={busy}
               >
                 <TranscriptView
+                  fill
                   result={result}
                   sourceName={resultName}
                   audioBlob={audio?.blob ?? null}
                   speakerNames={speakerNames}
+                  versions={doc.versions}
+                  activeVersionId={doc.activeId}
+                  onSelectVersion={doc.select}
+                  onDuplicateVersion={duplicateVersion}
+                  onDeleteVersion={doc.remove}
                   onRenameSpeaker={renameSpeaker}
                   onReassignSegment={reassignSegment}
+                  onMergeSpeakers={mergeSpeakersInDoc}
+                  onSplitSegment={splitInDoc}
+                  onJoinPrevious={joinInDoc}
                 />
               </div>
             )}
           </section>
 
-          {result && phase === 'done' && !busy && (
-            <AiPanel
-              sourceText={result.text}
-              keys={keys}
-              settings={settings}
-              glossaries={glossaries}
-              endpoints={endpoints}
-              taskApi={taskApi}
-            />
-          )}
-        </div>
+          <div className="min-w-0 min-h-0 lg:h-full">
+            {showAi && result ? (
+              <AiPanel
+                fill
+                result={result}
+                speakerNames={speakerNames}
+                versionNumber={activeVersionNo}
+                onApply={applyAi}
+                keys={keys}
+                settings={settings}
+                glossaries={glossaries}
+                endpoints={endpoints}
+                taskApi={taskApi}
+              />
+            ) : (
+              <section className="panel p-4 text-sm text-muted-foreground lg:h-full flex items-center justify-center text-center">
+                {tr('ai.placeholder')}
+              </section>
+            )}
+          </div>
+        </main>
+      )}
 
-        {/* Правая колонка */}
-        <div className="flex flex-col gap-4 min-w-0">
-          <StoragePanel />
-          <HistoryPanel items={history} onOpen={openHistory} onRemove={removeHistoryEntry} />
-        </div>
-      </main>
-
-      <footer className="hairline-b border-b-0 border-t border-[hsl(var(--border))] mt-auto">
+      <footer
+        className={`hairline-b border-b-0 border-t border-[hsl(var(--border))] mt-auto ${stage === 'work' ? 'lg:hidden' : ''}`}
+      >
         <div className="max-w-[1560px] mx-auto px-4 py-3 flex flex-wrap gap-x-6 gap-y-1 text-[11px] font-mono text-muted-foreground">
           <span>
             STENO v{__APP_VERSION__} · {tr('foot.tagline')}

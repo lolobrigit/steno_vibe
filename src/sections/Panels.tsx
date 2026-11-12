@@ -14,13 +14,26 @@ interface HistoryPanelProps {
   items: HistoryItem[]
   onOpen: (item: HistoryItem) => void
   onRemove: (id: string) => void
+  /** окно экспорта/импорта проектов */
+  onProjects?: () => void
 }
 
-export function HistoryPanel({ items, onOpen, onRemove }: HistoryPanelProps) {
+export function HistoryPanel({ items, onOpen, onRemove, onProjects }: HistoryPanelProps) {
   const t = useT()
   return (
     <section className="panel p-4 flex flex-col gap-3" aria-label={t('hist.title')}>
-      <h2 className="chrome-label">{t('hist.title')}</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="chrome-label">{t('hist.title')}</h2>
+        {onProjects && (
+          <button
+            type="button"
+            onClick={onProjects}
+            className="btn-console !min-h-8 px-2.5 text-xs cursor-pointer"
+          >
+            {t('prj.open')}
+          </button>
+        )}
+      </div>
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground border border-dashed border-[hsl(var(--border))] rounded px-3 py-4 text-center">
           {t('hist.empty')}
