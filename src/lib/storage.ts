@@ -36,6 +36,8 @@ export interface AppSettings {
   translate: boolean
   diarize: boolean
   silenceStop: boolean
+  /** локальный Whisper: пословные метки времени (точные субтитры; медленнее, не все модели) */
+  wordTimestamps?: boolean
   theme: ThemeName
   /** пользователь сам выбрал тему (иначе действует тема по умолчанию) */
   themeChosen?: boolean

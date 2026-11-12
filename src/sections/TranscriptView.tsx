@@ -6,16 +6,27 @@ import {
   GitMerge,
   Layers,
   Link2,
+  Bookmark,
+  GitCompare,
+  MessageSquare,
   Pencil,
+  Redo2,
+  Replace,
+  Search,
+  Sparkles,
+  Undo2,
+  ChevronDown,
+  ChevronUp,
   Scissors,
   Trash2,
   Users,
   X,
 } from 'lucide-react'
 import { formatDurationShort, formatTimecode } from '@/lib/audio'
-import { downloadFile, toSrt, toTxt, toTxtStamped, toVtt } from '@/lib/exporters'
+import { blobToDataUrl, downloadFile, toHtml, toMarkdown, toSrt, toTxt, toTxtStamped, toVtt } from '@/lib/exporters'
+import { DiffModal } from '@/sections/DiffModal'
 import { activeSegmentIndex, type PlayerHandle } from '@/lib/player'
-import { NEW_SPEAKER, speakersOf } from '@/lib/transcript'
+import { findInText, findMatches, NEW_SPEAKER, speakersOf } from '@/lib/transcript'
 import type { TranscriptResult, TranscriptVersion } from '@/types'
 import { languageName, speakerLabel, useT } from '@/i18n'
 
@@ -53,6 +64,18 @@ interface TranscriptViewProps {
   onJoinPrevious?: (index: number) => void
   /** заменить текст реплики `index` */
   onEditSegment?: (index: number, text: string) => void
+  /** закладка / комментарий */
+  onSegmentMeta?: (index: number, patch: { mark?: boolean; note?: string }) => void
+  /** заменить запрос; index — только в этой реплике; возвращает число замен */
+  onReplace?: (query: string, replacement: string, matchCase: boolean, index?: number) => number
+  /** убрать слова-паразиты; возвращает число удалённых */
+  onCleanFillers?: () => number
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
+  /** скриншоты для экспорта в документ */
+  shots?: { time: number; blob: Blob }[]
   /** занять всю высоту родителя: список реплик прокручивается внутри блока */
   fill?: boolean
 }
@@ -89,6 +112,14 @@ export function TranscriptView({
   onSplitSegment,
   onJoinPrevious,
   onEditSegment,
+  onSegmentMeta,
+  onReplace,
+  onCleanFillers,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+  shots = [],
   fill = false,
 }: TranscriptViewProps) {
   const t = useT()
@@ -105,6 +136,16 @@ export function TranscriptView({
   const [editingSpeaker, setEditingSpeaker] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [merge, setMerge] = useState<{ from: string; into: string } | null>(null)
+  // поиск и замена
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQ, setFindQ] = useState('')
+  const [replQ, setReplQ] = useState('')
+  const [matchCase, setMatchCase] = useState(false)
+  const [curMatch, setCurMatch] = useState(0)
+  const findInput = useRef<HTMLInputElement | null>(null)
+  const [diffOpen, setDiffOpen] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [noteIdx, setNoteIdx] = useState<number | null>(null)
   const [editIdx, setEditIdx] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
   const [splitIdx, setSplitIdx] = useState<number | null>(null)
@@ -139,6 +180,116 @@ export function TranscriptView({
     const top = row.offsetTop - (list.clientHeight - row.offsetHeight) / 2
     list.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
   }, [activeIdx])
+
+  const matches = useMemo(
+    () => (findOpen ? findMatches(result.segments, findQ, matchCase) : []),
+    [findOpen, findQ, matchCase, result.segments],
+  )
+  const total = matches.reduce((a, m) => a + m.count, 0)
+  const curSeg = matches[Math.min(curMatch, Math.max(0, matches.length - 1))]?.index ?? -1
+
+  const scrollToRow = (i: number) => {
+    const list = listRef.current
+    const row = list?.querySelector<HTMLElement>(`[data-seg="${i}"]`)
+    if (!list || !row) return
+    userScrollAt.current = Date.now()
+    list.scrollTo({ top: Math.max(0, row.offsetTop - (list.clientHeight - row.offsetHeight) / 2), behavior: 'smooth' })
+  }
+  const goMatch = (delta: number) => {
+    if (!matches.length) return
+    const n = (curMatch + delta + matches.length) % matches.length
+    setCurMatch(n)
+    scrollToRow(matches[n].index)
+  }
+  useEffect(() => setCurMatch(0), [findQ, matchCase])
+
+  // Ctrl/Cmd+F открывает поиск по расшифровке вместо поиска браузера
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setFindOpen(true)
+        window.setTimeout(() => findInput.current?.select(), 0)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const flash = (text: string) => {
+    setNotice(text)
+    window.setTimeout(() => setNotice(null), 3500)
+  }
+
+  const marks = useMemo(
+    () => result.segments.map((s, i) => (s.mark ? i : -1)).filter((i) => i >= 0),
+    [result.segments],
+  )
+  const markCursor = useRef(0)
+  const nextMark = () => {
+    if (!marks.length) return
+    markCursor.current = (markCursor.current + 1) % marks.length
+    const i = marks[markCursor.current]
+    scrollToRow(i)
+    playerRef.current?.seek(result.segments[i].start)
+  }
+
+  /** Текст реплики с подсвеченными вхождениями поиска. */
+  const highlighted = (text: string, isCur: boolean) => {
+    if (!findOpen || !findQ) return text
+    const hits = findInText(text, findQ, matchCase)
+    if (!hits.length) return text
+    const out: React.ReactNode[] = []
+    let at = 0
+    hits.forEach((h, k) => {
+      out.push(text.slice(at, h.at))
+      out.push(
+        <mark key={k} className={`rounded px-0.5 text-foreground ${isCur ? 'bg-[hsl(var(--primary)/0.55)]' : 'bg-[hsl(var(--warn)/0.4)]'}`}>
+          {text.slice(h.at, h.at + h.len)}
+        </mark>,
+      )
+      at = h.at + h.len
+    })
+    out.push(text.slice(at))
+    return out
+  }
+
+  // черновик правки переживает перезагрузку страницы
+  const DRAFT_KEY = 'steno.draft.v1'
+  useEffect(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null') as { sig: string; idx: number; text: string } | null
+      if (d && d.sig === activeVersionId && result.segments[d.idx] && onEditSegment) {
+        setEditIdx(d.idx)
+        setEditText(d.text)
+      }
+    } catch {
+      /* ignore */
+    }
+    // только при открытии версии
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeVersionId])
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const exportDoc = async (kind: 'md' | 'html') => {
+    const docShots = await Promise.all(shots.map(async (s) => ({ time: s.time, dataUrl: await blobToDataUrl(s.blob) })))
+    const opts = {
+      title: baseName,
+      segments: result.segments,
+      fallbackText: result.text,
+      nameOf: displayName,
+      shots: docShots,
+      noteLabel: t('note.label'),
+    }
+    if (kind === 'md') downloadFile(`${baseName}.md`, toMarkdown(opts), 'text/markdown')
+    else downloadFile(`${baseName}.html`, toHtml(opts), 'text/html')
+  }
 
   const displayName = (sp: string) => speakerNames[sp]?.trim() || speakerLabel(sp)
 
@@ -178,12 +329,14 @@ export function TranscriptView({
     setSplitIdx(null)
     setEditText(result.segments[i]?.text ?? '')
     setEditIdx(i)
+    setNoteIdx(null)
   }
   const commitEdit = () => {
     if (editIdx === null) return
     const text = editText.replace(/\s+/g, ' ').trim()
     if (text && text !== result.segments[editIdx]?.text) onEditSegment?.(editIdx, text)
     setEditIdx(null)
+    clearDraft()
   }
 
   const applySplit = () => {
@@ -274,6 +427,102 @@ export function TranscriptView({
           </button>
         </div>
       )}
+
+      {/* инструменты: поиск, отмена правок, чистка, сравнение, закладки */}
+      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+        {onReplace && (
+          <button type="button" onClick={() => { setFindOpen((v) => !v); window.setTimeout(() => findInput.current?.focus(), 0) }} aria-pressed={findOpen} title={`${t('find.btn')} (Ctrl+F)`} aria-label={t('find.btn')} className={`${iconBtn} ${findOpen ? '!text-[hsl(var(--primary))]' : ''}`}>
+            <Search className="size-4" aria-hidden="true" />
+          </button>
+        )}
+        {onUndo && (
+          <>
+            <button type="button" onClick={onUndo} disabled={!canUndo} title={`${t('undo.undo')} (Ctrl+Z)`} aria-label={t('undo.undo')} className={`${iconBtn} disabled:opacity-30 disabled:cursor-not-allowed`}>
+              <Undo2 className="size-4" aria-hidden="true" />
+            </button>
+            <button type="button" onClick={onRedo} disabled={!canRedo} title={`${t('undo.redo')} (Ctrl+Shift+Z)`} aria-label={t('undo.redo')} className={`${iconBtn} disabled:opacity-30 disabled:cursor-not-allowed`}>
+              <Redo2 className="size-4" aria-hidden="true" />
+            </button>
+          </>
+        )}
+        {onCleanFillers && hasSegments && (
+          <button
+            type="button"
+            onClick={() => {
+              const n = onCleanFillers()
+              flash(n > 0 ? t('fill.done', { n }) : t('fill.none'))
+            }}
+            title={t('fill.btn')}
+            aria-label={t('fill.btn')}
+            className={iconBtn}
+          >
+            <Sparkles className="size-4" aria-hidden="true" />
+          </button>
+        )}
+        {versions.length > 1 && (
+          <button type="button" onClick={() => setDiffOpen(true)} title={t('diff.title')} aria-label={t('diff.title')} className={iconBtn}>
+            <GitCompare className="size-4" aria-hidden="true" />
+          </button>
+        )}
+        {marks.length > 0 && (
+          <button type="button" onClick={nextMark} title={t('mark.next')} className="inline-flex items-center gap-1 h-7 px-2 rounded text-xs text-[hsl(var(--warn))] hover:bg-[hsl(var(--row-hover))] cursor-pointer">
+            <Bookmark className="size-3.5 fill-current" aria-hidden="true" /> {marks.length}
+          </button>
+        )}
+        {notice && <span role="status" className="text-xs text-muted-foreground ml-1">{notice}</span>}
+      </div>
+
+      {findOpen && onReplace && (
+        <div className="panel-inset px-2.5 py-2 flex flex-wrap items-center gap-2 shrink-0 text-xs">
+          <input
+            ref={findInput}
+            value={findQ}
+            onChange={(e) => setFindQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') goMatch(e.shiftKey ? -1 : 1)
+              if (e.key === 'Escape') setFindOpen(false)
+            }}
+            placeholder={t('find.placeholder')}
+            aria-label={t('find.placeholder')}
+            className="h-8 w-40 rounded border border-[hsl(var(--border))] bg-background px-2 text-foreground"
+          />
+          <span className="tabular-nums text-muted-foreground min-w-[3.5rem]">
+            {findQ ? (total ? `${Math.min(curMatch, matches.length - 1) + 1}/${matches.length}` : t('find.none')) : ''}
+          </span>
+          <button type="button" onClick={() => goMatch(-1)} disabled={!matches.length} aria-label={t('find.prev')} className={`${iconBtn} disabled:opacity-30`}><ChevronUp className="size-4" aria-hidden="true" /></button>
+          <button type="button" onClick={() => goMatch(1)} disabled={!matches.length} aria-label={t('find.next')} className={`${iconBtn} disabled:opacity-30`}><ChevronDown className="size-4" aria-hidden="true" /></button>
+          <label className="flex items-center gap-1 text-muted-foreground cursor-pointer">
+            <input type="checkbox" checked={matchCase} onChange={(e) => setMatchCase(e.target.checked)} /> {t('find.case')}
+          </label>
+          <input
+            value={replQ}
+            onChange={(e) => setReplQ(e.target.value)}
+            placeholder={t('find.replaceWith')}
+            aria-label={t('find.replaceWith')}
+            className="h-8 w-40 rounded border border-[hsl(var(--border))] bg-background px-2 text-foreground"
+          />
+          <button
+            type="button"
+            disabled={!matches.length}
+            onClick={() => {
+              if (curSeg >= 0) onReplace(findQ, replQ, matchCase, curSeg)
+            }}
+            className="btn-console !min-h-8 px-2.5 disabled:opacity-40 cursor-pointer"
+          >
+            <Replace className="size-3.5" aria-hidden="true" /> {t('find.replace')}
+          </button>
+          <button
+            type="button"
+            disabled={!matches.length}
+            onClick={() => flash(t('find.replaced', { n: onReplace(findQ, replQ, matchCase) }))}
+            className="btn-console !min-h-8 px-2.5 disabled:opacity-40 cursor-pointer"
+          >
+            {t('find.replaceAll')}
+          </button>
+        </div>
+      )}
+
+      {diffOpen && <DiffModal versions={versions} activeId={activeVersionId} onClose={() => setDiffOpen(false)} />}
 
       {speakers.length > 0 && (
         <div className="panel-inset px-3 py-2.5 shrink-0">
@@ -407,7 +656,8 @@ export function TranscriptView({
                     'group/row grid grid-cols-[86px_1fr_auto] sm:grid-cols-[120px_1fr_auto] gap-3 px-2 py-1.5 rounded transition-colors ' +
                     (isActive
                       ? 'bg-[hsl(var(--primary)/0.12)] ring-1 ring-[hsl(var(--primary)/0.35)]'
-                      : 'hover:bg-[hsl(var(--row-hover))]')
+                      : 'hover:bg-[hsl(var(--row-hover))]') +
+                    (s.mark ? ' border-l-2 border-[hsl(var(--warn))]' : '')
                   }
                 >
                   <span className="font-mono text-[11px] text-[hsl(var(--primary)/0.8)] pt-0.5 whitespace-nowrap">
@@ -439,15 +689,26 @@ export function TranscriptView({
                       </select>
                     )}
                   </span>
+                  <div className="min-w-0">
                   {editIdx === i ? (
                     <div className="flex flex-col gap-1.5 min-w-0">
                       <textarea
                         autoFocus
                         value={editText}
                         rows={Math.max(2, Math.ceil(editText.length / 60))}
-                        onChange={(e) => setEditText(e.target.value)}
+                        onChange={(e) => {
+                          setEditText(e.target.value)
+                          try {
+                            localStorage.setItem(DRAFT_KEY, JSON.stringify({ sig: activeVersionId, idx: editIdx, text: e.target.value }))
+                          } catch {
+                            /* ignore */
+                          }
+                        }}
                         onKeyDown={(e) => {
-                          if (e.key === 'Escape') setEditIdx(null)
+                          if (e.key === 'Escape') {
+                            setEditIdx(null)
+                            clearDraft()
+                          }
                           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) commitEdit()
                         }}
                         aria-label={t('edit.btn')}
@@ -457,7 +718,7 @@ export function TranscriptView({
                         <button type="button" onClick={commitEdit} className="btn-console !min-h-8 px-2.5 cursor-pointer" style={{ color: 'hsl(var(--primary))' }}>
                           <Check className="size-3.5" aria-hidden="true" /> {t('edit.save')}
                         </button>
-                        <button type="button" onClick={() => setEditIdx(null)} className="btn-console !min-h-8 px-2.5 cursor-pointer text-muted-foreground">
+                        <button type="button" onClick={() => { setEditIdx(null); clearDraft() }} className="btn-console !min-h-8 px-2.5 cursor-pointer text-muted-foreground">
                           <X className="size-3.5" aria-hidden="true" /> {t('common.cancel')}
                         </button>
                         <span className="text-muted-foreground/70 hidden sm:inline">{t('edit.hint')}</span>
@@ -473,10 +734,57 @@ export function TranscriptView({
                       onClick={() => playerRef.current?.seek(s.start, true)}
                       onDoubleClick={() => onEditSegment && startEdit(i)}
                     >
-                      {s.text}
+                      {highlighted(s.text, i === curSeg)}
                     </span>
                   )}
+                  {s.note && noteIdx !== i && (
+                    <p className="mt-0.5 text-xs italic text-muted-foreground cursor-pointer" onClick={() => setNoteIdx(i)}>
+                      <MessageSquare className="size-3 inline mr-1" aria-hidden="true" />
+                      {s.note}
+                    </p>
+                  )}
+                  {noteIdx === i && (
+                    <input
+                      autoFocus
+                      defaultValue={s.note ?? ''}
+                      placeholder={t('note.placeholder')}
+                      aria-label={t('note.placeholder')}
+                      onBlur={(e) => {
+                        onSegmentMeta?.(i, { note: e.target.value.trim() })
+                        setNoteIdx(null)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        if (e.key === 'Escape') setNoteIdx(null)
+                      }}
+                      className="mt-1 w-full rounded border border-[hsl(var(--border))] bg-background px-2 py-1 text-xs"
+                    />
+                  )}
+                  </div>
                   <span className="flex items-start gap-0.5 opacity-60 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {onSegmentMeta && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onSegmentMeta(i, { mark: !s.mark })}
+                          aria-pressed={!!s.mark}
+                          className={`${iconBtn} ${s.mark ? '!text-[hsl(var(--warn))] !opacity-100' : ''}`}
+                          title={t('mark.toggle')}
+                          aria-label={t('mark.toggle')}
+                        >
+                          <Bookmark className={`size-3.5 ${s.mark ? 'fill-current' : ''}`} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNoteIdx(noteIdx === i ? null : i)}
+                          className={iconBtn}
+                          title={t('note.btn')}
+                          aria-label={t('note.btn')}
+                        >
+                          <MessageSquare className="size-3.5" aria-hidden="true" />
+                        </button>
+                      </>
+                    )}
                     {onEditSegment && (
                       <button
                         type="button"
@@ -638,6 +946,12 @@ export function TranscriptView({
           onClick={() => downloadFile(`${baseName}.vtt`, toVtt(result.segments), 'text/vtt')}
         >
           <Download className="size-4" aria-hidden="true" /> VTT
+        </button>
+        <button type="button" className={exportBtn} onClick={() => void exportDoc('md')} title={t('exp.mdHint')}>
+          <Download className="size-4" aria-hidden="true" /> MD
+        </button>
+        <button type="button" className={exportBtn} onClick={() => void exportDoc('html')} title={t('exp.htmlHint')}>
+          <Download className="size-4" aria-hidden="true" /> HTML
         </button>
       </div>
     </div>

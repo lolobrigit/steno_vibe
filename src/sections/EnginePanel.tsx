@@ -248,6 +248,22 @@ export function EnginePanel(p: EnginePanelProps) {
         )}
       </div>
 
+      {settings.mode === 'local' && (
+        <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer px-1">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            disabled={p.busy}
+            checked={!!settings.wordTimestamps}
+            onChange={(e) => set('wordTimestamps', e.target.checked)}
+          />
+          <span>
+            {t('eng.words')}
+            <span className="block text-[11px] opacity-80">{t('eng.wordsNote')}</span>
+          </span>
+        </label>
+      )}
+
       {/* Справочники терминов: уходят в Whisper (initial_prompt) и в LLM */}
       {p.glossaries.length > 0 && (
         <div className="flex flex-col gap-1.5">

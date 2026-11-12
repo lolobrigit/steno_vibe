@@ -222,3 +222,49 @@ describe('versions', () => {
     expect(out.speakerNames).toEqual({})
   })
 })
+
+import { diffWords, findMatches, removeFillers, replaceInSegments, segmentsFromWords } from './transcript'
+
+describe('search, replace, fillers, diff', () => {
+  const segs = [
+    { start: 0, end: 2, text: 'Привет, привет мир' },
+    { start: 2, end: 4, text: 'Ну, это как бы эээ тест' },
+  ]
+  it('findMatches counts case-insensitively', () => {
+    expect(findMatches(segs, 'привет', false)).toEqual([{ index: 0, count: 2 }])
+    expect(findMatches(segs, 'привет', true)).toEqual([{ index: 0, count: 1 }])
+  })
+  it('replaceInSegments all and one', () => {
+    const r = replaceInSegments(segs, 'привет', 'Здравствуйте', false)
+    expect(r.count).toBe(2)
+    expect(r.segments[0].text).toBe('Здравствуйте, Здравствуйте мир')
+    const one = replaceInSegments(segs, 'это', 'то', false, 0)
+    expect(one.count).toBe(0)
+  })
+  it('removeFillers cleans ru fillers and keeps timing', () => {
+    const r = removeFillers(segs, 'ru')
+    expect(r.count).toBeGreaterThan(0)
+    expect(r.segments[1].start).toBe(2)
+    expect(/эээ|как бы/.test(r.segments[1].text)).toBe(false)
+  })
+  it('removeFillers drops empty segment', () => {
+    const r = removeFillers([{ start: 0, end: 1, text: 'Эээ...' }, { start: 1, end: 2, text: 'ok' }], 'ru')
+    expect(r.segments).toHaveLength(1)
+  })
+  it('diffWords marks changes', () => {
+    const d = diffWords('a b c', 'a x c')
+    expect(d.map((o) => o.kind)).toEqual(['same', 'del', 'add', 'same'])
+  })
+  it('segmentsFromWords splits on sentence end and pause', () => {
+    const w = [
+      { text: 'Hello', start: 0, end: 0.4 },
+      { text: 'world.', start: 0.4, end: 0.9 },
+      { text: 'Next', start: 3, end: 3.4 },
+      { text: 'one', start: 3.4, end: 3.8 },
+    ]
+    const s = segmentsFromWords(w)
+    expect(s).toHaveLength(2)
+    expect(s[0].text).toBe('Hello world.')
+    expect(s[1].start).toBe(3)
+  })
+})

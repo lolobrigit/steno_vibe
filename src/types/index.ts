@@ -3,6 +3,12 @@ export interface Segment {
   end: number
   text: string
   speaker?: string
+  /** закладка на реплике */
+  mark?: boolean
+  /** комментарий к реплике (в экспорт текста не попадает) */
+  note?: string
+  /** пословные метки (если включены у локального Whisper) */
+  words?: { text: string; start: number; end: number }[]
 }
 
 export interface TranscriptResult {

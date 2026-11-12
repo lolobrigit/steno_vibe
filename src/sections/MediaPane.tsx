@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { Check, Copy, Download, Trash2, X } from 'lucide-react'
+import { Check, Copy, Download, Film, Loader2, Trash2, X } from 'lucide-react'
+import { exportSubtitledVideo, videoExportSupported } from '@/lib/videoExport'
 import { formatTimecode } from '@/lib/audio'
 import { detectMediaKind, MediaPlayerBar, type PlayerHandle, type Shot } from '@/lib/player'
 import type { Segment } from '@/types'
@@ -17,6 +18,8 @@ interface Props {
   videoMaxHeight: string
   /** кнопки справа в панели плеера (например «увеличить») */
   extra?: ReactNode
+  /** список скриншотов изменился (для экспорта в документ) */
+  onShotsChange?: (shots: { time: number; blob: Blob }[]) => void
 }
 
 interface Entry {
@@ -39,6 +42,7 @@ export function MediaPane({
   onState,
   videoMaxHeight,
   extra,
+  onShotsChange,
 }: Props) {
   const t = useT()
   const media = useMemo(() => ({ url: URL.createObjectURL(blob), kind: detectMediaKind(blob, sourceName) }), [blob, sourceName])
@@ -47,6 +51,36 @@ export function MediaPane({
   const [shots, setShots] = useState<Entry[]>([])
   const [open, setOpen] = useState<number | null>(null)
   const [copied, setCopied] = useState<'ok' | 'fail' | null>(null)
+  useEffect(() => {
+    onShotsChange?.(shots.map((s) => ({ time: s.time, blob: s.blob })))
+  }, [shots, onShotsChange])
+  const [exportPct, setExportPct] = useState<number | null>(null)
+  const [exportErr, setExportErr] = useState(false)
+  const exportAbort = useRef<AbortController | null>(null)
+  useEffect(() => () => exportAbort.current?.abort(), [])
+  const runExport = async () => {
+    setExportErr(false)
+    setExportPct(0)
+    exportAbort.current = new AbortController()
+    try {
+      const out = await exportSubtitledVideo({
+        url: media.url,
+        segments,
+        nameOf,
+        onProgress: setExportPct,
+        signal: exportAbort.current.signal,
+      })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(out)
+      a.download = `${base}_subtitles.webm`
+      a.click()
+      window.setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setExportErr(true)
+    } finally {
+      setExportPct(null)
+    }
+  }
   const shotsRef = useRef(shots)
   shotsRef.current = shots
   // освободить адреса при смене файла и закрытии
@@ -104,6 +138,27 @@ export function MediaPane({
         videoMaxHeight={videoMaxHeight}
         extra={extra}
       />
+
+      {media.kind === 'video' && segments.length > 0 && videoExportSupported() && (
+        <div className="flex items-center gap-2 text-xs">
+          {exportPct === null ? (
+            <button type="button" onClick={() => void runExport()} className="btn-console !min-h-8 px-2.5 cursor-pointer" title={t('vexp.hint')}>
+              <Film className="size-3.5" aria-hidden="true" /> {t('vexp.btn')}
+            </button>
+          ) : (
+            <>
+              <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+              <div className="flex-1 h-1.5 rounded bg-[hsl(var(--border))] overflow-hidden" role="progressbar" aria-valuenow={Math.round(exportPct * 100)}>
+                <div className="h-full bg-[hsl(var(--primary))]" style={{ width: `${Math.round(exportPct * 100)}%` }} />
+              </div>
+              <button type="button" onClick={() => exportAbort.current?.abort()} className="btn-console !min-h-8 px-2.5 cursor-pointer">
+                {t('common.cancel')}
+              </button>
+            </>
+          )}
+          {exportErr && <span role="alert" style={{ color: 'hsl(var(--err))' }}>{t('vexp.failed')}</span>}
+        </div>
+      )}
 
       {shots.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label={t('shot.title')}>
