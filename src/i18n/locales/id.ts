@@ -422,6 +422,18 @@ const id: Record<string, string> = {
   'split.badPos': 'Letakkan kursor di dalam teks, bukan di tepinya',
   'hdr.theme.aurora': 'Aurora',
   'hdr.theme.aurora-light': 'Aurora terang',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': 'Subtitel di atas video',
+  'shot.btn': 'Ambil tangkapan layar',
+  'shot.title': 'Tangkapan layar',
+  'shot.copy': 'Salin ke papan klip',
+  'shot.copied': 'Tersalin',
+  'shot.download': 'Unduh PNG',
+  'shot.delete': 'Hapus',
+  'shot.copyFailed': 'Gagal menyalin ke papan klip — unduh gambarnya',
+  'media.expand': 'Perbesar video dan sembunyikan panel AI',
+  'media.shrink': 'Tampilkan lagi panel AI',
+  'run.details': 'Detail',
 }
 
 export default id

@@ -449,6 +449,18 @@ const en: Record<string, string> = {
   'split.badPos': 'Put the cursor inside the text, not at its edge',
   'hdr.theme.aurora': 'Aurora',
   'hdr.theme.aurora-light': 'Aurora light',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': 'Subtitles over the video',
+  'shot.btn': 'Take a screenshot',
+  'shot.title': 'Screenshots',
+  'shot.copy': 'Copy to clipboard',
+  'shot.copied': 'Copied',
+  'shot.download': 'Download PNG',
+  'shot.delete': 'Delete',
+  'shot.copyFailed': 'Could not copy to the clipboard — download the image instead',
+  'media.expand': 'Enlarge the video and hide the AI panel',
+  'media.shrink': 'Show the AI panel again',
+  'run.details': 'Details',
 }
 
 export default en

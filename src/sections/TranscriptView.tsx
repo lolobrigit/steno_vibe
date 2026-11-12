@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   Check,
   Copy,
@@ -14,12 +14,7 @@ import {
 } from 'lucide-react'
 import { formatDurationShort, formatTimecode } from '@/lib/audio'
 import { downloadFile, toSrt, toTxt, toTxtStamped, toVtt } from '@/lib/exporters'
-import {
-  activeSegmentIndex,
-  detectMediaKind,
-  MediaPlayerBar,
-  type PlayerHandle,
-} from '@/lib/player'
+import { activeSegmentIndex, type PlayerHandle } from '@/lib/player'
 import { NEW_SPEAKER, speakersOf } from '@/lib/transcript'
 import type { TranscriptResult, TranscriptVersion } from '@/types'
 import { languageName, speakerLabel, useT } from '@/i18n'
@@ -38,8 +33,10 @@ function loadExportFormat(): ExportFormat {
 interface TranscriptViewProps {
   result: TranscriptResult
   sourceName: string
-  /** медиа для проигрывания с подсветкой реплик */
-  audioBlob?: Blob | null
+  /** есть ли медиа: клик по реплике перематывает его (плеер — в MediaPane) */
+  hasMedia?: boolean
+  playerRef: RefObject<PlayerHandle | null>
+  playerState: { playing: boolean; time: number; duration: number }
   /** «S1» → «Иван» */
   speakerNames?: Record<string, string>
   versions: TranscriptVersion[]
@@ -75,7 +72,9 @@ function speakerColor(speaker: string): string {
 export function TranscriptView({
   result,
   sourceName,
-  audioBlob,
+  hasMedia = false,
+  playerRef,
+  playerState,
   speakerNames = {},
   versions,
   activeVersionId,
@@ -115,22 +114,6 @@ export function TranscriptView({
   const hasSegments = result.segments.length > 0
 
   const speakers = useMemo(() => speakersOf(result.segments), [result.segments])
-
-  const player = useMemo(
-    () =>
-      audioBlob
-        ? { url: URL.createObjectURL(audioBlob), kind: detectMediaKind(audioBlob, sourceName) }
-        : null,
-    [audioBlob, sourceName],
-  )
-  useEffect(
-    () => () => {
-      if (player) URL.revokeObjectURL(player.url)
-    },
-    [player],
-  )
-  const playerRef = useRef<PlayerHandle | null>(null)
-  const [playerState, setPlayerState] = useState({ playing: false, time: 0, duration: 0 })
 
   const activeIdx = useMemo(
     () =>
@@ -275,18 +258,6 @@ export function TranscriptView({
         </div>
       )}
 
-      {player && hasSegments && (
-        <div className="shrink-0">
-          <MediaPlayerBar
-            ref={playerRef}
-            url={player.url}
-            kind={player.kind}
-            fallbackDuration={result.durationSec}
-            onState={setPlayerState}
-          />
-        </div>
-      )}
-
       {speakers.length > 0 && (
         <div className="panel-inset px-3 py-2.5 shrink-0">
           <div className="chrome-label !text-[10px] flex items-center gap-1.5 mb-2 flex-wrap">
@@ -425,8 +396,8 @@ export function TranscriptView({
                     <button
                       type="button"
                       className="hover:underline disabled:no-underline"
-                      disabled={!player}
-                      title={player ? t('tv.jump') : undefined}
+                      disabled={!hasMedia}
+                      title={hasMedia ? t('tv.jump') : undefined}
                       onClick={() => playerRef.current?.seek(s.start, true)}
                     >
                       {formatTimecode(s.start)}
@@ -453,9 +424,9 @@ export function TranscriptView({
                   <span
                     className={
                       'text-[15px] leading-relaxed text-foreground/90 ' +
-                      (player ? 'cursor-pointer hover:text-foreground' : '')
+                      (hasMedia ? 'cursor-pointer hover:text-foreground' : '')
                     }
-                    title={player ? t('tv.jump') : undefined}
+                    title={hasMedia ? t('tv.jump') : undefined}
                     onClick={() => playerRef.current?.seek(s.start, true)}
                   >
                     {s.text}

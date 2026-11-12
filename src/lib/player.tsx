@@ -2,8 +2,8 @@
 // тексту. Полоса прогресса кликабельна (перемотка), клик по таймкоду или тексту
 // реплики — переход к фрагменту; активная строка подсвечивается и центрируется.
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Pause, Play } from 'lucide-react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
+import { Camera, Captions, Pause, Play } from 'lucide-react'
 import { formatTimecode } from '@/lib/audio'
 import type { Segment } from '@/types'
 import { useT } from '@/i18n'
@@ -29,10 +29,97 @@ export function detectMediaKind(blob: Blob, name: string): MediaKind {
   return /\.(mp4|mkv|webm|mov|avi|m4v|ts|mts)$/i.test(name) ? 'video' : 'audio'
 }
 
+const SUBS_KEY = 'steno.subs.v1'
+function loadSubs(): boolean {
+  try {
+    return localStorage.getItem(SUBS_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+/** Слова реплики и номер последнего «уже произнесённого» (оценка по доле символов). */
+export function activeWords(seg: Segment, time: number): { words: string[]; upto: number } {
+  const words = seg.text.split(/\s+/).filter(Boolean)
+  const total = words.reduce((a, w) => a + w.length + 1, 0) || 1
+  const frac = seg.end > seg.start ? Math.min(1, Math.max(0, (time - seg.start) / (seg.end - seg.start))) : 1
+  let acc = 0
+  let upto = -1
+  words.forEach((w, i) => {
+    acc += w.length + 1
+    if (acc / total <= frac + 1e-6) upto = i
+  })
+  return { words, upto }
+}
+
+/** Реплика, которую надо показать как субтитр в момент `time` (или null в паузе между репликами). */
+export function subtitleAt(segments: Segment[], time: number): Segment | null {
+  const i = activeSegmentIndex(segments, time)
+  if (i < 0) return null
+  const seg = segments[i]
+  return time <= seg.end + 0.4 ? seg : null
+}
+
+/** Нарисовать субтитр поверх кадра (для скриншота): те же подсветка слов и плашка. */
+function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number, seg: Segment, time: number, who?: string) {
+  const size = Math.max(16, Math.round(h * 0.045))
+  ctx.font = `600 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`
+  ctx.textBaseline = 'middle'
+  const { words, upto } = activeWords(seg, time)
+  const maxW = w * 0.86
+  const space = ctx.measureText(' ').width
+  const lines: { i: number; w: number }[][] = [[]]
+  let lw = 0
+  words.forEach((word, i) => {
+    const ww = ctx.measureText(word).width
+    if (lw + ww > maxW && lines[lines.length - 1].length) {
+      lines.push([])
+      lw = 0
+    }
+    lines[lines.length - 1].push({ i, w: ww })
+    lw += ww + space
+  })
+  const lineH = size * 1.35
+  const boxH = lines.length * lineH + size * (who ? 1.6 : 0.8)
+  const boxW = Math.min(w * 0.92, Math.max(...lines.map((l) => l.reduce((a, x) => a + x.w + space, 0))) + size * 1.6)
+  const x0 = (w - boxW) / 2
+  const y0 = h - boxH - h * 0.05
+  ctx.fillStyle = 'rgba(8,10,20,0.78)'
+  ctx.beginPath()
+  ctx.roundRect(x0, y0, boxW, boxH, size * 0.5)
+  ctx.fill()
+  let y = y0 + size * 0.4
+  if (who) {
+    ctx.font = `600 ${Math.round(size * 0.6)}px system-ui, sans-serif`
+    ctx.fillStyle = '#7dd3fc'
+    ctx.textAlign = 'center'
+    ctx.fillText(who.toUpperCase(), w / 2, y + size * 0.4)
+    y += size * 0.8
+    ctx.font = `600 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`
+  }
+  ctx.textAlign = 'left'
+  for (const line of lines) {
+    const total = line.reduce((a, x) => a + x.w + space, 0) - space
+    let x = (w - total) / 2
+    for (const it of line) {
+      ctx.fillStyle = it.i <= upto ? '#fde68a' : '#ffffff'
+      ctx.fillText(words[it.i], x, y + lineH / 2)
+      x += it.w + space
+    }
+    y += lineH
+  }
+}
+
 export interface PlayerHandle {
   toggle: () => void
   /** переход к секунде; autoplay=true — ещё и запускает воспроизведение */
   seek: (sec: number, autoplay?: boolean) => void
+}
+
+export interface Shot {
+  blob: Blob
+  /** секунда видео, с которой снят кадр */
+  time: number
 }
 
 interface PlayerState {
@@ -106,8 +193,21 @@ export const MediaPlayerBar = forwardRef<
     /** длительность из метаданных транскрипта, пока тег не прочитал свою */
     fallbackDuration: number
     onState: (s: PlayerState) => void
+    /** реплики для субтитров поверх видео */
+    segments?: Segment[]
+    /** отображаемое имя спикера в субтитре */
+    nameOf?: (speaker: string) => string
+    /** снят скриншот (кнопка в панели) */
+    onShot?: (shot: Shot) => void
+    /** максимальная высота видео (CSS) */
+    videoMaxHeight?: string
+    /** дополнительные кнопки справа в панели */
+    extra?: ReactNode
   }
->(function MediaPlayerBar({ url, kind, fallbackDuration, onState }, ref) {
+>(function MediaPlayerBar(
+  { url, kind, fallbackDuration, onState, segments, nameOf, onShot, videoMaxHeight = '34vh', extra },
+  ref,
+) {
   const t = useT()
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -115,6 +215,7 @@ export const MediaPlayerBar = forwardRef<
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(fallbackDuration)
   const [rate, setRateState] = useState(loadRate)
+  const [subsOn, setSubsOn] = useState(loadSubs)
   const rateRef = useRef(rate)
   rateRef.current = rate
   const el = (kind === 'video' ? videoRef.current : audioRef.current) as HTMLMediaElement | null
@@ -186,6 +287,33 @@ export const MediaPlayerBar = forwardRef<
     [el],
   )
 
+  const toggleSubs = () => {
+    setSubsOn((v) => {
+      try {
+        localStorage.setItem(SUBS_KEY, v ? '0' : '1')
+      } catch {
+        /* ignore */
+      }
+      return !v
+    })
+  }
+
+  const sub = kind === 'video' && subsOn && segments?.length ? subtitleAt(segments, time) : null
+
+  const shoot = () => {
+    const v = videoRef.current
+    if (!v || !v.videoWidth) return
+    const c = document.createElement('canvas')
+    c.width = v.videoWidth
+    c.height = v.videoHeight
+    const ctx = c.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(v, 0, 0, c.width, c.height)
+    if (sub) drawSubtitle(ctx, c.width, c.height, sub, v.currentTime, sub.speaker ? nameOf?.(sub.speaker) : undefined)
+    const at = v.currentTime
+    c.toBlob((blob) => blob && onShot?.({ blob, time: at }), 'image/png')
+  }
+
   useEffect(() => {
     onState({ playing, time, duration })
   }, [playing, time, duration, onState])
@@ -193,19 +321,23 @@ export const MediaPlayerBar = forwardRef<
   return (
     <div className="flex flex-col gap-2">
       {kind === 'video' && (
-        <video
-          ref={videoRef}
-          src={url}
-          preload="metadata"
-          className="w-full max-h-[34vh] rounded-lg bg-black object-contain cursor-pointer"
-          controls={false}
-          playsInline
-          onClick={() => {
-            if (!videoRef.current) return
-            if (videoRef.current.paused) void videoRef.current.play().catch(() => {})
-            else videoRef.current.pause()
-          }}
-        />
+        <div className="relative">
+          <video
+            ref={videoRef}
+            src={url}
+            preload="metadata"
+            className="w-full rounded-lg bg-black object-contain cursor-pointer"
+            style={{ maxHeight: videoMaxHeight }}
+            controls={false}
+            playsInline
+            onClick={() => {
+              if (!videoRef.current) return
+              if (videoRef.current.paused) void videoRef.current.play().catch(() => {})
+              else videoRef.current.pause()
+            }}
+          />
+          {sub && <SubtitleOverlay seg={sub} time={time} who={sub.speaker ? nameOf?.(sub.speaker) : undefined} />}
+        </div>
       )}
       {kind === 'audio' && <audio ref={audioRef} src={url} preload="metadata" />}
       <div className="panel-inset px-3 py-2 flex items-center gap-3">
@@ -249,10 +381,61 @@ export const MediaPlayerBar = forwardRef<
             ))}
           </select>
         </label>
+        {kind === 'video' && (
+          <>
+            {segments && segments.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleSubs}
+                aria-pressed={subsOn}
+                title={t('sub.toggle')}
+                aria-label={t('sub.toggle')}
+                className={`size-8 shrink-0 inline-flex items-center justify-center rounded-md cursor-pointer transition-colors ${
+                  subsOn ? 'text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.14)]' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Captions className="size-4" aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={shoot}
+              title={t('shot.btn')}
+              aria-label={t('shot.btn')}
+              className="size-8 shrink-0 inline-flex items-center justify-center rounded-md cursor-pointer text-muted-foreground hover:text-foreground"
+            >
+              <Camera className="size-4" aria-hidden="true" />
+            </button>
+          </>
+        )}
+        {extra}
       </div>
     </div>
   )
 })
+
+/** Субтитр поверх видео: плашка как активная реплика в расшифровке, слова подсвечиваются по мере речи. */
+function SubtitleOverlay({ seg, time, who }: { seg: Segment; time: number; who?: string }) {
+  const { words, upto } = activeWords(seg, time)
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
+      <div className="max-w-[92%] rounded-lg px-3 py-1.5 text-center bg-[rgba(8,10,20,0.78)] ring-1 ring-[hsl(var(--primary)/0.4)] backdrop-blur-sm">
+        {who && (
+          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--primary))] leading-tight">
+            {who}
+          </div>
+        )}
+        <div className="font-semibold leading-snug text-[clamp(12px,1.5vw,19px)] text-white [text-shadow:0_1px_2px_rgba(0,0,0,.6)]">
+          {words.map((w, i) => (
+            <span key={i} className={i <= upto ? 'text-amber-200' : undefined}>
+              {w}{' '}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /** Индекс активного сегмента по текущему времени (бинпоиск по start). */
 export function activeSegmentIndex(segments: Segment[], t: number): number {

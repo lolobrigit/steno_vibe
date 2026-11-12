@@ -422,6 +422,18 @@ const nl: Record<string, string> = {
   'split.badPos': 'Zet de cursor in de tekst, niet aan de rand',
   'hdr.theme.aurora': 'Aurora',
   'hdr.theme.aurora-light': 'Aurora licht',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': 'Ondertitels over de video',
+  'shot.btn': 'Screenshot maken',
+  'shot.title': 'Screenshots',
+  'shot.copy': 'Kopiëren naar klembord',
+  'shot.copied': 'Gekopieerd',
+  'shot.download': 'PNG downloaden',
+  'shot.delete': 'Verwijderen',
+  'shot.copyFailed': 'Kopiëren naar het klembord mislukt — download de afbeelding',
+  'media.expand': 'Video vergroten en AI-paneel verbergen',
+  'media.shrink': 'AI-paneel weer tonen',
+  'run.details': 'Details',
 }
 
 export default nl

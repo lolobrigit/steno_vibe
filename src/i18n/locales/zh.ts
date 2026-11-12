@@ -422,6 +422,18 @@ const zh: Record<string, string> = {
   'split.badPos': '请把光标放在文本中间，而不是边缘',
   'hdr.theme.aurora': '极光',
   'hdr.theme.aurora-light': '极光（浅色）',
+  // ── скриншоты, субтитры, раскладка чтения ──
+  'sub.toggle': '视频上的字幕',
+  'shot.btn': '截取屏幕截图',
+  'shot.title': '屏幕截图',
+  'shot.copy': '复制到剪贴板',
+  'shot.copied': '已复制',
+  'shot.download': '下载 PNG',
+  'shot.delete': '删除',
+  'shot.copyFailed': '无法复制到剪贴板——请改为下载图片',
+  'media.expand': '放大视频并隐藏 AI 面板',
+  'media.shrink': '重新显示 AI 面板',
+  'run.details': '详情',
 }
 
 export default zh
