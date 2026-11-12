@@ -434,6 +434,13 @@ const zh: Record<string, string> = {
   'media.expand': '放大视频并隐藏 AI 面板',
   'media.shrink': '重新显示 AI 面板',
   'run.details': '详情',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': '编辑文本',
+  'edit.save': '保存',
+  'edit.hint': 'Ctrl+Enter 保存，Esc 取消',
+  'ai.expand': '展开结果（覆盖视频区域）',
+  'ai.collapse': '收起结果',
+  'ai.sync': '联动结果与转写的滚动',
 }
 
 export default zh

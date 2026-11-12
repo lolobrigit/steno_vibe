@@ -434,6 +434,13 @@ const tr: Record<string, string> = {
   'media.expand': 'Videoyu büyüt ve YZ panelini gizle',
   'media.shrink': 'YZ panelini yeniden göster',
   'run.details': 'Ayrıntılar',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'Metni düzenle',
+  'edit.save': 'Kaydet',
+  'edit.hint': 'Ctrl+Enter — kaydet, Esc — iptal',
+  'ai.expand': 'Sonucu genişlet (videonun üzerinde)',
+  'ai.collapse': 'Sonucu daralt',
+  'ai.sync': 'Sonuç ve dökümün kaydırmasını bağla',
 }
 
 export default tr

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Check, Copy, Layers, Loader2, Sparkles, Square } from 'lucide-react'
+import { AlertTriangle, Check, Copy, Layers, Link2, Loader2, Maximize2, Minimize2, Sparkles, Square } from 'lucide-react'
+import { speakerColor } from '@/sections/TranscriptView'
+import { formatTimecode } from '@/lib/audio'
 import { AI_ACTIONS } from '@/lib/models'
 import { aiProviderLabel, runAiPrompt, type AiProvider, AI_PROVIDERS, LLM_CLOUD_MODELS } from '@/lib/ai'
 import { customChat, type CustomEndpoint } from '@/lib/customEndpoints'
@@ -53,6 +55,12 @@ interface AiPanelProps {
   fill?: boolean
   /** идёт обработка или есть результат — Home сужает видео */
   onActive?: (active: boolean) => void
+  /** результат развёрнут на всю колонку (десктоп) */
+  expanded?: boolean
+  onToggleExpand?: () => void
+  /** прокрутка результата и расшифровки связана */
+  syncOn?: boolean
+  onToggleSync?: () => void
   keys: ApiKeys
   settings: AppSettings
   glossaries: Glossary[]
@@ -74,6 +82,10 @@ export function AiPanel({
   onApply,
   fill = false,
   onActive,
+  expanded = false,
+  onToggleExpand,
+  syncOn = false,
+  onToggleSync,
   keys,
   settings,
   glossaries,
@@ -441,9 +453,9 @@ export function AiPanel({
       )}
 
       {output && (
-        <div className="flex flex-col gap-2 border-t border-[hsl(var(--border))] pt-3">
-          <div className="flex items-center justify-between">
-            <span className="chrome-label !text-[10px]">
+        <div className={`flex flex-col gap-2 border-t border-[hsl(var(--border))] pt-3 ${expanded ? 'flex-1 min-h-0' : ''}`}>
+          <div className="flex items-center justify-between gap-1.5 flex-wrap">
+            <span className="chrome-label !text-[10px] mr-auto">
               {t('ai.result')} · {outputFrom}
             </span>
             <button
@@ -458,14 +470,74 @@ export function AiPanel({
               )}
               {copied ? t('common.copied') : t('common.copy')}
             </button>
+            {parsed && onToggleSync && (
+              <button
+                type="button"
+                onClick={onToggleSync}
+                aria-pressed={syncOn}
+                title={t('ai.sync')}
+                aria-label={t('ai.sync')}
+                className={`btn-console !min-h-8 px-2.5 border cursor-pointer ${
+                  syncOn
+                    ? 'border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))]'
+                    : 'border-[hsl(var(--border))] text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Link2 className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
+            {onToggleExpand && (
+              <button
+                type="button"
+                onClick={onToggleExpand}
+                aria-pressed={expanded}
+                title={expanded ? t('ai.collapse') : t('ai.expand')}
+                aria-label={expanded ? t('ai.collapse') : t('ai.expand')}
+                className="hidden lg:inline-flex btn-console !min-h-8 px-2.5 border border-[hsl(var(--border))] text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                {expanded ? <Minimize2 className="size-3.5" aria-hidden="true" /> : <Maximize2 className="size-3.5" aria-hidden="true" />}
+              </button>
+            )}
           </div>
-          <p
-            className={`text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap overflow-y-auto pr-1 panel-inset px-3 py-3 ${
-              fill ? 'max-h-[42vh]' : 'max-h-72'
-            }`}
-          >
-            {output}
-          </p>
+          {parsed ? (
+            <ol
+              data-sync="llm"
+              className={`relative flex flex-col gap-1 overflow-y-auto pr-1 panel-inset px-2 py-2 ${
+                expanded ? 'flex-1 min-h-0' : fill ? 'max-h-[42vh]' : 'max-h-72'
+              }`}
+            >
+              {parsed.segments.map((s, i) => {
+                const prev = parsed.segments[i - 1]
+                const who = (sp: string) => speakerNames[sp]?.trim() || parsed.newNames[sp] || speakerLabel(sp)
+                return (
+                  <li key={i} data-start={s.start}>
+                    {s.speaker && s.speaker !== prev?.speaker && (
+                      <div
+                        className="font-mono text-[10px] uppercase tracking-[0.16em] mt-2 mb-0.5 px-2"
+                        style={{ color: speakerColor(s.speaker) }}
+                      >
+                        ● {who(s.speaker)}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-[86px_1fr] sm:grid-cols-[120px_1fr] gap-3 px-2 py-1.5 rounded hover:bg-[hsl(var(--row-hover))]">
+                      <span className="font-mono text-[11px] text-[hsl(var(--primary)/0.8)] pt-0.5 whitespace-nowrap">
+                        {formatTimecode(s.start)}
+                      </span>
+                      <span className="text-[15px] leading-relaxed text-foreground/90">{s.text}</span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          ) : (
+            <p
+              className={`text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap overflow-y-auto pr-1 panel-inset px-3 py-3 ${
+                expanded ? 'flex-1 min-h-0' : fill ? 'max-h-[42vh]' : 'max-h-72'
+              }`}
+            >
+              {output}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"

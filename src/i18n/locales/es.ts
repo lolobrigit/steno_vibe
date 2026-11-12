@@ -434,6 +434,13 @@ const es: Record<string, string> = {
   'media.expand': 'Ampliar el vídeo y ocultar el panel de IA',
   'media.shrink': 'Mostrar de nuevo el panel de IA',
   'run.details': 'Detalles',
+  // ── правка текста, развёрнутый результат LLM ──
+  'edit.btn': 'Editar texto',
+  'edit.save': 'Guardar',
+  'edit.hint': 'Ctrl+Intro: guardar, Esc: cancelar',
+  'ai.expand': 'Ampliar el resultado (sobre el vídeo)',
+  'ai.collapse': 'Contraer el resultado',
+  'ai.sync': 'Sincronizar el desplazamiento del resultado y la transcripción',
 }
 
 export default es

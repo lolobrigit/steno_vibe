@@ -51,6 +51,8 @@ interface TranscriptViewProps {
   /** разделить реплику `index` по смещению в тексте; вторая часть — у `speaker` (NEW_SPEAKER — новый) */
   onSplitSegment?: (index: number, offset: number, speaker: string) => void
   onJoinPrevious?: (index: number) => void
+  /** заменить текст реплики `index` */
+  onEditSegment?: (index: number, text: string) => void
   /** занять всю высоту родителя: список реплик прокручивается внутри блока */
   fill?: boolean
 }
@@ -63,7 +65,7 @@ const SPEAKER_COLORS = [
   'hsl(265 70% 72%)',
 ]
 
-function speakerColor(speaker: string): string {
+export function speakerColor(speaker: string): string {
   let h = 0
   for (const c of speaker) h = (h * 31 + c.charCodeAt(0)) >>> 0
   return SPEAKER_COLORS[h % SPEAKER_COLORS.length]
@@ -86,6 +88,7 @@ export function TranscriptView({
   onMergeSpeakers,
   onSplitSegment,
   onJoinPrevious,
+  onEditSegment,
   fill = false,
 }: TranscriptViewProps) {
   const t = useT()
@@ -102,6 +105,8 @@ export function TranscriptView({
   const [editingSpeaker, setEditingSpeaker] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [merge, setMerge] = useState<{ from: string; into: string } | null>(null)
+  const [editIdx, setEditIdx] = useState<number | null>(null)
+  const [editText, setEditText] = useState('')
   const [splitIdx, setSplitIdx] = useState<number | null>(null)
   const [splitSpeaker, setSplitSpeaker] = useState(NEW_SPEAKER)
   const [splitError, setSplitError] = useState(false)
@@ -167,6 +172,18 @@ export function TranscriptView({
     setSplitSpeaker(other ?? NEW_SPEAKER)
     setSplitError(false)
     setSplitIdx(i)
+  }
+
+  const startEdit = (i: number) => {
+    setSplitIdx(null)
+    setEditText(result.segments[i]?.text ?? '')
+    setEditIdx(i)
+  }
+  const commitEdit = () => {
+    if (editIdx === null) return
+    const text = editText.replace(/\s+/g, ' ').trim()
+    if (text && text !== result.segments[editIdx]?.text) onEditSegment?.(editIdx, text)
+    setEditIdx(null)
   }
 
   const applySplit = () => {
@@ -365,6 +382,7 @@ export function TranscriptView({
       {hasSegments ? (
         <ol
           ref={listRef}
+          data-sync="transcript"
           onWheel={() => (userScrollAt.current = Date.now())}
           onTouchMove={() => (userScrollAt.current = Date.now())}
           className={`relative flex flex-col gap-1 overflow-y-auto pr-1 ${
@@ -375,7 +393,7 @@ export function TranscriptView({
             const showSpeaker = s.speaker && s.speaker !== result.segments[i - 1]?.speaker
             const isActive = i === activeIdx
             return (
-              <li key={i} data-seg={i}>
+              <li key={i} data-seg={i} data-start={s.start}>
                 {showSpeaker && (
                   <div
                     className="font-mono text-[10px] uppercase tracking-[0.16em] mt-2 mb-0.5 px-2"
@@ -421,17 +439,55 @@ export function TranscriptView({
                       </select>
                     )}
                   </span>
-                  <span
-                    className={
-                      'text-[15px] leading-relaxed text-foreground/90 ' +
-                      (hasMedia ? 'cursor-pointer hover:text-foreground' : '')
-                    }
-                    title={hasMedia ? t('tv.jump') : undefined}
-                    onClick={() => playerRef.current?.seek(s.start, true)}
-                  >
-                    {s.text}
-                  </span>
+                  {editIdx === i ? (
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                      <textarea
+                        autoFocus
+                        value={editText}
+                        rows={Math.max(2, Math.ceil(editText.length / 60))}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') setEditIdx(null)
+                          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) commitEdit()
+                        }}
+                        aria-label={t('edit.btn')}
+                        className="w-full resize-y rounded border border-[hsl(var(--primary)/0.5)] bg-background px-2 py-1.5 text-[15px] leading-relaxed focus:outline-none"
+                      />
+                      <div className="flex items-center gap-2 text-xs">
+                        <button type="button" onClick={commitEdit} className="btn-console !min-h-8 px-2.5 cursor-pointer" style={{ color: 'hsl(var(--primary))' }}>
+                          <Check className="size-3.5" aria-hidden="true" /> {t('edit.save')}
+                        </button>
+                        <button type="button" onClick={() => setEditIdx(null)} className="btn-console !min-h-8 px-2.5 cursor-pointer text-muted-foreground">
+                          <X className="size-3.5" aria-hidden="true" /> {t('common.cancel')}
+                        </button>
+                        <span className="text-muted-foreground/70 hidden sm:inline">{t('edit.hint')}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span
+                      className={
+                        'text-[15px] leading-relaxed text-foreground/90 ' +
+                        (hasMedia ? 'cursor-pointer hover:text-foreground' : '')
+                      }
+                      title={hasMedia ? t('tv.jump') : undefined}
+                      onClick={() => playerRef.current?.seek(s.start, true)}
+                      onDoubleClick={() => onEditSegment && startEdit(i)}
+                    >
+                      {s.text}
+                    </span>
+                  )}
                   <span className="flex items-start gap-0.5 opacity-60 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity">
+                    {onEditSegment && (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(i)}
+                        className={`${iconBtn} ${editIdx === i ? '!text-[hsl(var(--primary))]' : ''}`}
+                        title={t('edit.btn')}
+                        aria-label={t('edit.btn')}
+                      >
+                        <Pencil className="size-3.5" aria-hidden="true" />
+                      </button>
+                    )}
                     {onSplitSegment && (
                       <button
                         type="button"
