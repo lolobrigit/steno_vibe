@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, HardDrive, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, HardDrive, Trash2, X } from 'lucide-react'
 import type { HistoryItem, TranscriptVersion } from '@/types'
 import { useT } from '@/i18n'
 import { formatBytes } from '@/lib/audio'
-import { deleteAudio, deleteConvertedWav, listAudio, type StoredAudioMeta } from '@/lib/audioStore'
+import { deleteAudio, deleteConvertedWav, getAudio, getConvertedWav, listAudio, type StoredAudioMeta } from '@/lib/audioStore'
+import { downloadBlob, downloadFile, toSrt, toTxt } from '@/lib/exporters'
 import { loadHistory, updateHistory } from '@/lib/storage'
 import { loadVersions, saveVersions } from '@/lib/versionStore'
 
@@ -85,6 +86,12 @@ export function StorageModal({ onClose, onHistory, onRemoveProject }: Props) {
     void load()
   }, [load])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   const totals = useMemo(() => {
     const sum = (kind: TranscriptVersion['kind']) =>
       rows.reduce(
@@ -112,6 +119,21 @@ export function StorageModal({ onClose, onHistory, onRemoveProject }: Props) {
     await load()
   }
 
+  const baseOf = (name: string) => name.replace(/\.[^./\\]+$/, '') || 'steno'
+  const dlFile = async (id: string, name: string) => {
+    const b = await getAudio(id)
+    if (b) downloadBlob(name, b)
+  }
+  const dlWav = async (id: string, name: string) => {
+    const b = await getConvertedWav(id)
+    if (b) downloadBlob(`${baseOf(name)}.wav`, b)
+  }
+  const dlVersion = (r: Row, v: TranscriptVersion, kind: 'txt' | 'srt') => {
+    const base = `${baseOf(r.item.sourceName)}_${v.kind}_${new Date(v.createdAt).toISOString().slice(0, 16).replace(/[:T]/g, '-')}`
+    if (kind === 'srt') downloadFile(`${base}.srt`, toSrt(v.segments), 'application/x-subrip')
+    else downloadFile(`${base}.txt`, v.segments.length ? toTxt(v.segments, v.text) : v.text)
+  }
+
   const delFile = async (r: Row) => {
     await deleteAudio(r.item.id)
     updateHistory(r.item.id, { hasAudio: false })
@@ -137,6 +159,8 @@ export function StorageModal({ onClose, onHistory, onRemoveProject }: Props) {
   )
   const del =
     'size-8 shrink-0 inline-flex items-center justify-center text-muted-foreground/60 hover:text-[hsl(var(--err))] cursor-pointer'
+  const dlBtn =
+    'size-8 shrink-0 inline-flex items-center justify-center text-muted-foreground/60 hover:text-foreground cursor-pointer'
   const line = 'flex items-center gap-2 py-1.5 border-t first:border-t-0 border-[hsl(var(--border))] text-[13px]'
 
   return (
@@ -205,6 +229,9 @@ export function StorageModal({ onClose, onHistory, onRemoveProject }: Props) {
                             <>
                               <span className="flex-1 truncate" title={r.audio.name}>{r.audio.name} · {r.audio.type || '—'}</span>
                               <span className="font-mono text-[11px] text-muted-foreground">{formatBytes(r.audio.size)}</span>
+                              <button type="button" onClick={() => void dlFile(r.item.id, r.audio!.name)} className={dlBtn} aria-label={t('exp.download')} title={t('exp.download')}>
+                                <Download className="size-3.5" aria-hidden="true" />
+                              </button>
                               <button type="button" onClick={() => void delFile(r)} className={del} aria-label={t('stor.deleteFile')} title={t('stor.deleteFile')}>
                                 <Trash2 className="size-3.5" aria-hidden="true" />
                               </button>
@@ -219,6 +246,9 @@ export function StorageModal({ onClose, onHistory, onRemoveProject }: Props) {
                             <>
                               <span className="flex-1">WAV</span>
                               <span className="font-mono text-[11px] text-muted-foreground">{formatBytes(r.audio.wavSize)}</span>
+                              <button type="button" onClick={() => void dlWav(r.item.id, r.audio!.name)} className={dlBtn} aria-label={t('exp.download')} title={t('exp.download')}>
+                                <Download className="size-3.5" aria-hidden="true" />
+                              </button>
                               <button type="button" onClick={() => void delWav(r.item.id)} className={del} aria-label={t('stor.deleteWav')} title={t('stor.deleteWav')}>
                                 <Trash2 className="size-3.5" aria-hidden="true" />
                               </button>
@@ -235,6 +265,14 @@ export function StorageModal({ onClose, onHistory, onRemoveProject }: Props) {
                             </span>
                             <span className="flex-1 truncate" title={v.label}>{v.label} · {new Date(v.createdAt).toLocaleString()}</span>
                             <span className="font-mono text-[11px] text-muted-foreground">{formatBytes(r.sizes[v.id] ?? 0)}</span>
+                            <button type="button" onClick={() => dlVersion(r, v, 'txt')} className={`${dlBtn} !w-auto px-1.5 text-[11px] font-mono`} title={t('exp.download')} aria-label={`${t('exp.download')} TXT`}>
+                              TXT
+                            </button>
+                            {v.segments.length > 0 && (
+                              <button type="button" onClick={() => dlVersion(r, v, 'srt')} className={`${dlBtn} !w-auto px-1.5 text-[11px] font-mono`} title={t('exp.download')} aria-label={`${t('exp.download')} SRT`}>
+                                SRT
+                              </button>
+                            )}
                             <button
                               type="button"
                               disabled={v.id === r.activeId || v.id === 'legacy' || r.versions.length < 2}
@@ -259,6 +297,9 @@ export function StorageModal({ onClose, onHistory, onRemoveProject }: Props) {
                     <div key={f.id} className={line}>
                       <span className="flex-1 truncate" title={f.name}>{f.name}</span>
                       <span className="font-mono text-[11px] text-muted-foreground">{formatBytes(f.size + (f.wavSize ?? 0))}</span>
+                      <button type="button" onClick={() => void dlFile(f.id, f.name)} className={dlBtn} aria-label={t('exp.download')} title={t('exp.download')}>
+                        <Download className="size-3.5" aria-hidden="true" />
+                      </button>
                       <button type="button" onClick={() => void deleteAudio(f.id).then(load)} className={del} aria-label={`${t('common.delete')} ${f.name}`}>
                         <Trash2 className="size-3.5" aria-hidden="true" />
                       </button>

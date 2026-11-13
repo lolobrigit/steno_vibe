@@ -16,6 +16,7 @@ import { EnginePanel } from '@/sections/EnginePanel'
 import { TranscriptView } from '@/sections/TranscriptView'
 import { HistoryPanel, StoragePanel } from '@/sections/Panels'
 import { SettingsModal } from '@/sections/SettingsModal'
+import { StorageModal } from '@/sections/StorageModal'
 import { FileConfirmModal } from '@/sections/FileConfirmModal'
 import { TaskList } from '@/sections/TaskList'
 import type { TaskApi, TaskItem } from '@/lib/tasks'
@@ -130,6 +131,7 @@ export default function Home() {
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [queueBusy, setQueueBusy] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [storageOpen, setStorageOpen] = useState(false)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [fileLoading, setFileLoading] = useState(false)
   const [tasks, setTasks] = useState<TaskItem[]>([])
@@ -1264,7 +1266,16 @@ export default function Home() {
         theme={settings.theme}
         onTheme={(theme) => setSettings((s) => ({ ...s, theme, themeChosen: true }))}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenStorage={() => setStorageOpen(true)}
       />
+
+      {storageOpen && (
+        <StorageModal
+          onClose={() => setStorageOpen(false)}
+          onHistory={setHistory}
+          onRemoveProject={removeHistoryEntry}
+        />
+      )}
 
       <SettingsModal
         open={settingsOpen}
@@ -1316,7 +1327,7 @@ export default function Home() {
           {stage === 'start' && (
             <div className="grid gap-4 md:grid-cols-2 items-start">
               {historyPanel}
-              <StoragePanel onHistory={setHistory} onRemoveProject={removeHistoryEntry} />
+              <StoragePanel onManage={() => setStorageOpen(true)} />
             </div>
           )}
         </main>
@@ -1357,7 +1368,7 @@ export default function Home() {
                   : flyout === 'history'
                     ? historyPanel
                     : flyout === 'storage'
-                      ? <StoragePanel onHistory={setHistory} onRemoveProject={removeHistoryEntry} />
+                      ? <StoragePanel onManage={() => setStorageOpen(true)} />
                       : null
             }
           />

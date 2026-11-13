@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleHelp, CloudUpload, Moon, Palette, Settings, ShieldCheck, Sparkles, Sun, SunMedium } from 'lucide-react'
+import { CircleHelp, CloudUpload, HardDrive, Moon, Palette, Settings, ShieldCheck, Sparkles, Sun, SunMedium } from 'lucide-react'
 import { QUALITY_GUIDE } from '@/lib/models'
 import type { ThemeName } from '@/lib/storage'
 import { useT } from '@/i18n'
@@ -11,6 +11,7 @@ interface HeaderProps {
   theme: ThemeName
   onTheme: (t: ThemeName) => void
   onOpenSettings: () => void
+  onOpenStorage: () => void
 }
 
 const STATUS: Record<HeaderProps['status'], { color: string; pulse: boolean }> = {
@@ -22,7 +23,7 @@ const STATUS: Record<HeaderProps['status'], { color: string; pulse: boolean }> =
 
 const THEMES: ThemeName[] = ['aurora', 'aurora-light', 'dark', 'light', 'neutral']
 
-export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettings }: HeaderProps) {
+export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettings, onOpenStorage }: HeaderProps) {
   const s = STATUS[status]
   const t = useT()
   const [guideOpen, setGuideOpen] = useState(false)
@@ -73,6 +74,16 @@ export function Header({ status, mode, deviceLabel, theme, onTheme, onOpenSettin
               </>
             )}
           </span>
+
+          <button
+            type="button"
+            onClick={onOpenStorage}
+            aria-label={t('stor.title')}
+            title={t('stor.title')}
+            className="size-9 inline-flex items-center justify-center rounded-[4px] text-muted-foreground hover:text-foreground cursor-pointer"
+          >
+            <HardDrive className="size-4.5" aria-hidden="true" />
+          </button>
 
           {/* Гайд «Модель → качество»: попап по наведению/клику */}
           <div
