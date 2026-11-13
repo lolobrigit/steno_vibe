@@ -504,6 +504,13 @@ const pl: Record<string, string> = {
   "stor.deleteVersion": "Usuń wersję",
   "stor.activeKeep": "Aktywnej wersji nie można usunąć",
   "stor.orphans": "Pliki bez projektu",
+  "ep.err.path": "Usługa odpowiedziała {status} dla {url}: {detail}. Sprawdź adres (zwykle kończy się na /v1) i ścieżkę transkrypcji w ustawieniach usługi.",
+  "set.ep.convert": "Przed wysłaniem konwertuj plik na dźwięk (WAV)",
+  "set.ep.convertNote": "Dla usług przyjmujących tylko dźwięk: wideo i inne formaty są wysyłane jako WAV 16 kHz mono (≈ 2 MB na minutę).",
+  "set.ep.asrPath": "Ścieżka transkrypcji (domyślnie /audio/transcriptions; tylko tryb bezpośredni)",
+  "set.ep.addModel": "Dodaj model ręcznie (id, np. whisper) — Enter",
+  "set.ep.testAsr": "Przetestuj transkrypcję",
+  "set.ep.testOk": "Transkrypcja działa: usługa przyjęła plik testowy",
 }
 
 export default pl

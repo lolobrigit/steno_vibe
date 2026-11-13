@@ -504,6 +504,13 @@ const it: Record<string, string> = {
   "stor.deleteVersion": "Elimina versione",
   "stor.activeKeep": "La versione attiva non può essere eliminata",
   "stor.orphans": "File senza progetto",
+  "ep.err.path": "Il servizio ha risposto {status} per {url}: {detail}. Controlla l’indirizzo (di solito termina con /v1) e il percorso di trascrizione nelle impostazioni del servizio.",
+  "set.ep.convert": "Converti il file in audio (WAV) prima dell’invio",
+  "set.ep.convertNote": "Per i servizi che accettano solo audio: video e altri formati vengono inviati come WAV 16 kHz mono (≈ 2 MB al minuto).",
+  "set.ep.asrPath": "Percorso di trascrizione (predefinito /audio/transcriptions; solo modalità diretta)",
+  "set.ep.addModel": "Aggiungi un modello manualmente (id, es. whisper) — Invio",
+  "set.ep.testAsr": "Prova la trascrizione",
+  "set.ep.testOk": "La trascrizione funziona: il servizio ha accettato un file di prova",
 }
 
 export default it

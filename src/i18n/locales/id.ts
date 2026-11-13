@@ -504,6 +504,13 @@ const id: Record<string, string> = {
   "stor.deleteVersion": "Hapus versi",
   "stor.activeKeep": "Versi aktif tidak dapat dihapus",
   "stor.orphans": "File tanpa proyek",
+  "ep.err.path": "Layanan menjawab {status} untuk {url}: {detail}. Periksa alamat (biasanya berakhir dengan /v1) dan jalur transkripsi di pengaturan layanan.",
+  "set.ep.convert": "Konversi file ke audio (WAV) sebelum dikirim",
+  "set.ep.convertNote": "Untuk layanan yang hanya menerima audio: video dan format lain dikirim sebagai WAV 16 kHz mono (≈ 2 MB per menit).",
+  "set.ep.asrPath": "Jalur transkripsi (default /audio/transcriptions; hanya mode langsung)",
+  "set.ep.addModel": "Tambah model secara manual (id, mis. whisper) — Enter",
+  "set.ep.testAsr": "Uji transkripsi",
+  "set.ep.testOk": "Transkripsi berfungsi: layanan menerima file uji",
 }
 
 export default id

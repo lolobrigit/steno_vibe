@@ -12,6 +12,7 @@
 // CUSTOM_ENDPOINT_PROXY=1).
 
 import { t } from '@/i18n'
+import { encodeWavPcm16 } from '@/lib/audio'
 import type { Segment } from '@/types'
 
 export type EndpointModelKind = 'asr' | 'llm'
@@ -27,6 +28,10 @@ export interface CustomEndpoint {
   baseUrl: string
   apiKey: string
   viaProxy: boolean
+  /** перед отправкой на распознавание превращать файл в WAV 16 кГц моно (сервис принимает только аудио) */
+  convertAudio?: boolean
+  /** свой путь распознавания, если не /audio/transcriptions (только прямой режим, без прокси) */
+  asrPath?: string
   /** выбранные пользователем модели */
   models: EndpointModel[]
   /** последний полученный список моделей сервиса */
@@ -95,7 +100,7 @@ const OP_PATH: Record<Op, string> = {
 }
 
 async function call(
-  ep: Pick<CustomEndpoint, 'baseUrl' | 'apiKey' | 'viaProxy'>,
+  ep: Pick<CustomEndpoint, 'baseUrl' | 'apiKey' | 'viaProxy' | 'asrPath'>,
   op: Op,
   init: { method: 'GET' | 'POST'; body?: BodyInit; json?: boolean; signal?: AbortSignal },
 ): Promise<Response> {
@@ -107,7 +112,8 @@ async function call(
     headers['x-base-url'] = ep.baseUrl
     if (ep.apiKey) headers['x-api-key'] = ep.apiKey
   } else {
-    url = `${ep.baseUrl}${OP_PATH[op]}`
+    const custom = op === 'transcribe' ? ep.asrPath?.trim() : ''
+    url = `${ep.baseUrl}${custom ? (custom.startsWith('/') ? custom : `/${custom}`) : OP_PATH[op]}`
     if (ep.apiKey) headers['Authorization'] = `Bearer ${ep.apiKey}`
   }
   let res: Response
@@ -128,6 +134,10 @@ async function call(
     }
     if (res.status === 401 || res.status === 403) {
       throw new Error(t('ep.err.auth', { status: res.status, detail }))
+    }
+    if (res.status === 404 || res.status === 405) {
+      // путь не тот: показываем адрес, на который реально ушёл запрос
+      throw new Error(t('ep.err.path', { status: res.status, url: ep.viaProxy ? `${ep.baseUrl}${OP_PATH[op]}` : url, detail }))
     }
     throw new Error(t('ep.err.http', { status: res.status, detail }))
   }
@@ -219,4 +229,14 @@ export async function customTranscribe(
     .map((s) => ({ start: s.start, end: s.end, text: (s.text ?? '').trim() }))
     .filter((s) => s.text.length > 0)
   return { text: (json.text ?? '').trim(), segments, language: json.language }
+}
+
+/** Проверка распознавания: отправляет секунду тишины (WAV 16 кГц) и показывает ошибку сервиса, если она есть. */
+export async function probeTranscribe(ep: CustomEndpoint, model: string): Promise<void> {
+  await customTranscribe(ep, model || 'whisper-1', {
+    file: encodeWavPcm16(new Float32Array(16000)),
+    fileName: 'probe.wav',
+    language: null,
+    translate: false,
+  })
 }

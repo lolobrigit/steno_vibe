@@ -21,7 +21,7 @@ import { FileConfirmModal } from '@/sections/FileConfirmModal'
 import { TaskList } from '@/sections/TaskList'
 import type { TaskApi, TaskItem } from '@/lib/tasks'
 import { Waveform } from '@/components/Waveform'
-import { decodeAudio, formatBytes, formatDurationShort, type DecodedAudio } from '@/lib/audio'
+import { decodeAudio, encodeWavPcm16, formatBytes, formatDurationShort, type DecodedAudio } from '@/lib/audio'
 import { decodeWithFfmpeg } from '@/lib/ffmpegDecode'
 import { transcribeCloud } from '@/lib/cloudEngines'
 import {
@@ -541,10 +541,18 @@ export default function Home() {
       ui?.status(t('st.sending', { service: modelLabel }))
       // облачный запрос без процента — бегущая полоса до ответа сервера
       ui?.task?.start('asr', t('task.asr'), modelLabel)
+      // сервис принимает только аудио: отправляем WAV 16 кГц моно вместо исходного (видео и т.п.)
+      let sendBlob = blob
+      let sendName = name
+      if (customAsr?.endpoint.convertAudio) {
+        if (!decoded) throw new Error(t('err.cannotDecode', { name }))
+        sendBlob = encodeWavPcm16(decoded.samples)
+        sendName = `${name.replace(/\.[^./\\]+$/, '') || 'audio'}.wav`
+      }
       const out = customAsr
         ? await customTranscribe(customAsr.endpoint, customAsr.modelId, {
-            file: blob,
-            fileName: name,
+            file: sendBlob,
+            fileName: sendName,
             language: lang,
             translate: settings.translate,
             prompt: glossHint || undefined,

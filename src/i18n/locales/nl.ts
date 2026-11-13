@@ -504,6 +504,13 @@ const nl: Record<string, string> = {
   "stor.deleteVersion": "Versie verwijderen",
   "stor.activeKeep": "De actieve versie kan niet worden verwijderd",
   "stor.orphans": "Bestanden zonder project",
+  "ep.err.path": "De service antwoordde {status} voor {url}: {detail}. Controleer het adres (eindigt meestal op /v1) en het transcriptiepad in de service-instellingen.",
+  "set.ep.convert": "Bestand vóór verzenden omzetten naar audio (WAV)",
+  "set.ep.convertNote": "Voor services die alleen audio accepteren: video en andere formaten worden verzonden als WAV 16 kHz mono (≈ 2 MB per minuut).",
+  "set.ep.asrPath": "Transcriptiepad (standaard /audio/transcriptions; alleen directe modus)",
+  "set.ep.addModel": "Model handmatig toevoegen (id, bijv. whisper) — Enter",
+  "set.ep.testAsr": "Transcriptie testen",
+  "set.ep.testOk": "Transcriptie werkt: de service accepteerde een testbestand",
 }
 
 export default nl
