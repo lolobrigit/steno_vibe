@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { FileAudio, HardDrive, Trash2 } from 'lucide-react'
 import { formatBytes, formatDurationShort } from '@/lib/audio'
 import { listAudio, type StoredAudioMeta } from '@/lib/audioStore'
-import { StorageModal } from '@/sections/StorageModal'
 import type { HistoryItem } from '@/types'
 import { getLanguage, useT } from '@/i18n'
 
@@ -84,22 +83,15 @@ export function HistoryPanel({ items, onOpen, onRemove, onProjects }: HistoryPan
   )
 }
 
-/** Сводка по локальному хранилищу; подробности и удаление — в большом окне (StorageModal).
- *  Управление моделями — в окне настроек (SettingsModal). */
-export function StoragePanel({
-  onHistory,
-  onRemoveProject,
-}: {
-  onHistory?: (list: HistoryItem[]) => void
-  onRemoveProject?: (id: string) => void
-}) {
+/** Сводка по локальному хранилищу; подробности, скачивание и удаление — в большом окне (StorageModal),
+ *  которое открывается отовсюду (кнопка в шапке). Модели — в окне настроек. */
+export function StoragePanel({ onManage }: { onManage: () => void }) {
   const [files, setFiles] = useState<StoredAudioMeta[]>([])
-  const [open, setOpen] = useState(false)
   const t = useT()
 
   useEffect(() => {
     void listAudio().then(setFiles)
-  }, [open])
+  }, [])
 
   const fileBytes = files.reduce((a, f) => a + f.size + (f.wavSize ?? 0), 0)
 
@@ -112,19 +104,12 @@ export function StoragePanel({
         </h2>
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={onManage}
           className="btn-console !min-h-8 px-2 text-muted-foreground hover:text-foreground"
         >
           {t('stor.manage')}
         </button>
       </div>
-      {open && (
-        <StorageModal
-          onClose={() => setOpen(false)}
-          onHistory={(l) => onHistory?.(l)}
-          onRemoveProject={(id) => onRemoveProject?.(id)}
-        />
-      )}
     </section>
   )
 }
