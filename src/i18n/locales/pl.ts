@@ -513,6 +513,9 @@ const pl: Record<string, string> = {
   "set.ep.testOk": "Transkrypcja działa: usługa przyjęła plik testowy",
   "eng.wordsService": "Żądane od usługi (timestamp_granularities=word); działa tylko, jeśli usługa to obsługuje.",
   "eng.noAsrHint": "Twoje usługi nie mają modeli rozpoznawania mowy. Otwórz ustawienia → Usługi i ustaw typ modelu {kind}.",
+  "spk.add": "Dodaj mówcę",
+  "spk.addName": "Nazwa mówcy — Enter",
+  "spk.none": "Brak mówcy",
 }
 
 export default pl

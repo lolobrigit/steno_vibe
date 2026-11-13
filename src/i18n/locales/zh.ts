@@ -513,6 +513,9 @@ const zh: Record<string, string> = {
   "set.ep.testOk": "转写正常：服务已接受测试文件",
   "eng.wordsService": "向服务请求（timestamp_granularities=word）；仅在服务支持时有效。",
   "eng.noAsrHint": "您的服务没有语音识别模型。请打开设置 → 服务，将模型类型设为{kind}。",
+  "spk.add": "添加说话人",
+  "spk.addName": "说话人姓名 — 回车",
+  "spk.none": "无说话人",
 }
 
 export default zh

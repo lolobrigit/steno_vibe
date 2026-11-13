@@ -513,6 +513,9 @@ const it: Record<string, string> = {
   "set.ep.testOk": "La trascrizione funziona: il servizio ha accettato un file di prova",
   "eng.wordsService": "Richiesti al servizio (timestamp_granularities=word); funziona solo se il servizio lo supporta.",
   "eng.noAsrHint": "I tuoi servizi non hanno modelli di riconoscimento vocale. Apri impostazioni → Servizi e imposta il tipo di modello su {kind}.",
+  "spk.add": "Aggiungi parlante",
+  "spk.addName": "Nome del parlante — Invio",
+  "spk.none": "Nessun parlante",
 }
 
 export default it

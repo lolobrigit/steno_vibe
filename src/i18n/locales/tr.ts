@@ -513,6 +513,9 @@ const tr: Record<string, string> = {
   "set.ep.testOk": "Transkripsiyon çalışıyor: hizmet test dosyasını kabul etti",
   "eng.wordsService": "Hizmetten istenir (timestamp_granularities=word); yalnızca hizmet destekliyorsa çalışır.",
   "eng.noAsrHint": "Hizmetlerinizde konuşma tanıma modeli yok. Ayarlar → Hizmetler bölümünü açıp model türünü {kind} yapın.",
+  "spk.add": "Konuşmacı ekle",
+  "spk.addName": "Konuşmacı adı — Enter",
+  "spk.none": "Konuşmacı yok",
 }
 
 export default tr

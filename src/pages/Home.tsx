@@ -849,7 +849,7 @@ export default function Home() {
     (index: number, speaker: string) =>
       upd((v) => ({
         ...v,
-        segments: v.segments.map((s, i) => (i === index ? { ...s, speaker } : s)),
+        segments: v.segments.map((s, i) => (i === index ? { ...s, speaker: speaker || undefined } : s)),
       })),
     [doc],
   )

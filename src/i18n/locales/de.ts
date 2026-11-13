@@ -513,6 +513,9 @@ const de: Record<string, string> = {
   "set.ep.testOk": "Transkription funktioniert: Der Dienst hat eine Testdatei akzeptiert",
   "eng.wordsService": "Wird beim Dienst angefordert (timestamp_granularities=word); funktioniert nur, wenn der Dienst es unterstützt.",
   "eng.noAsrHint": "Ihre Dienste haben keine Spracherkennungsmodelle. Öffnen Sie Einstellungen → Dienste und setzen Sie den Modelltyp auf {kind}.",
+  "spk.add": "Sprecher hinzufügen",
+  "spk.addName": "Sprechername – Enter",
+  "spk.none": "Kein Sprecher",
 }
 
 export default de

@@ -540,6 +540,9 @@ const en: Record<string, string> = {
   "set.ep.testOk": "Transcription works: the service accepted a test file",
   "eng.wordsService": "Requested from the service (timestamp_granularities=word); works only if the service supports it.",
   "eng.noAsrHint": "Your services have no speech-recognition models. Open settings → Services and set the model type to {kind}.",
+  "spk.add": "Add speaker",
+  "spk.addName": "Speaker name — Enter",
+  "spk.none": "No speaker",
 }
 
 export default en

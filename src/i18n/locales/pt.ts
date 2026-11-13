@@ -513,6 +513,9 @@ const pt: Record<string, string> = {
   "set.ep.testOk": "A transcrição funciona: o serviço aceitou um arquivo de teste",
   "eng.wordsService": "Solicitados ao serviço (timestamp_granularities=word); só funciona se o serviço oferecer suporte.",
   "eng.noAsrHint": "Seus serviços não têm modelos de reconhecimento de fala. Abra configurações → Serviços e defina o tipo do modelo como {kind}.",
+  "spk.add": "Adicionar falante",
+  "spk.addName": "Nome do falante — Enter",
+  "spk.none": "Sem falante",
 }
 
 export default pt

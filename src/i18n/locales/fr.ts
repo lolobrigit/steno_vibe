@@ -513,6 +513,9 @@ const fr: Record<string, string> = {
   "set.ep.testOk": "La transcription fonctionne : le service a accepté un fichier de test",
   "eng.wordsService": "Demandés au service (timestamp_granularities=word) ; ne fonctionne que si le service le prend en charge.",
   "eng.noAsrHint": "Vos services n’ont aucun modèle de reconnaissance vocale. Ouvrez Réglages → Services et définissez le type {kind}.",
+  "spk.add": "Ajouter un locuteur",
+  "spk.addName": "Nom du locuteur — Entrée",
+  "spk.none": "Aucun locuteur",
 }
 
 export default fr

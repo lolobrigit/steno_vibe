@@ -513,6 +513,9 @@ const id: Record<string, string> = {
   "set.ep.testOk": "Transkripsi berfungsi: layanan menerima file uji",
   "eng.wordsService": "Diminta dari layanan (timestamp_granularities=word); hanya berfungsi jika layanan mendukungnya.",
   "eng.noAsrHint": "Layanan Anda tidak punya model pengenalan suara. Buka pengaturan → Layanan dan atur jenis model ke {kind}.",
+  "spk.add": "Tambah pembicara",
+  "spk.addName": "Nama pembicara — Enter",
+  "spk.none": "Tanpa pembicara",
 }
 
 export default id

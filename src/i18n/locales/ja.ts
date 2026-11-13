@@ -513,6 +513,9 @@ const ja: Record<string, string> = {
   "set.ep.testOk": "文字起こしは動作しています：サービスがテストファイルを受け付けました",
   "eng.wordsService": "サービスに要求します（timestamp_granularities=word）。サービスが対応している場合のみ動作します。",
   "eng.noAsrHint": "サービスに音声認識モデルがありません。設定 → サービスを開き、モデルの種類を{kind}にしてください。",
+  "spk.add": "話者を追加",
+  "spk.addName": "話者名 — Enter",
+  "spk.none": "話者なし",
 }
 
 export default ja

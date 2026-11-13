@@ -513,6 +513,9 @@ const ru: Record<string, string> = {
   "set.ep.testOk": "Распознавание работает: сервис принял тестовый файл",
   "eng.wordsService": "Запрашиваются у сервиса (timestamp_granularities=word); работает, только если сервис это поддерживает.",
   "eng.noAsrHint": "У ваших сервисов нет моделей распознавания. Откройте настройки → Сервисы и укажите тип модели {kind}.",
+  "spk.add": "Добавить спикера",
+  "spk.addName": "Имя спикера — Enter",
+  "spk.none": "Без спикера",
 }
 
 export default ru

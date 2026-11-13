@@ -19,14 +19,14 @@ import {
   Scissors,
   Trash2,
   Users,
-  X,
+  X, Plus,
 } from 'lucide-react'
 import { formatDurationShort, formatTimecode } from '@/lib/audio'
 import { blobToDataUrl, downloadFile, toHtml, toMarkdown, toSrt, toTxt, toTxtStamped, toVtt } from '@/lib/exporters'
 import { DiffModal } from '@/sections/DiffModal'
 import { ExportMenu } from '@/sections/ExportMenu'
 import { activeSegmentIndex, type PlayerHandle } from '@/lib/player'
-import { findInText, findMatches, NEW_SPEAKER, speakerColor, speakersOf } from '@/lib/transcript'
+import { findInText, findMatches, NEW_SPEAKER, nextSpeakerId, speakerColor, speakersOf } from '@/lib/transcript'
 import type { TranscriptResult, TranscriptVersion } from '@/types'
 import { languageName, speakerLabel, useT } from '@/i18n'
 
@@ -147,7 +147,20 @@ export function TranscriptView({
   const words = result.text.split(/\s+/).filter(Boolean).length
   const hasSegments = result.segments.length > 0
 
-  const speakers = useMemo(() => speakersOf(result.segments), [result.segments])
+  // спикеры реплик + добавленные вручную (у них есть имя, но пока нет реплик)
+  const speakers = useMemo(() => {
+    const list = speakersOf(result.segments)
+    for (const id of Object.keys(speakerNames)) if (!list.includes(id)) list.push(id)
+    return list
+  }, [result.segments, speakerNames])
+  const [adding, setAdding] = useState(false)
+  const [newSpeakerName, setNewSpeakerName] = useState('')
+  const addSpeaker = () => {
+    const name = newSpeakerName.trim()
+    if (name) onRenameSpeaker?.(nextSpeakerId(result.segments, Object.keys(speakerNames)), name)
+    setAdding(false)
+    setNewSpeakerName('')
+  }
 
   const activeIdx = useMemo(
     () =>
@@ -513,7 +526,7 @@ export function TranscriptView({
 
       {diffOpen && <DiffModal versions={versions} activeId={activeVersionId} onClose={() => setDiffOpen(false)} />}
 
-      {speakers.length > 0 && (
+      {(speakers.length > 0 || (!!onRenameSpeaker && result.segments.length > 0)) && (
         <div className="panel-inset px-3 py-2.5 shrink-0">
           <div className="chrome-label !text-[10px] flex items-center gap-1.5 mb-2 flex-wrap">
             <Users className="size-3.5" aria-hidden="true" /> {t('tv.speakers')}
@@ -563,6 +576,33 @@ export function TranscriptView({
                 )}
               </div>
             ))}
+            {onRenameSpeaker && (
+              adding ? (
+                <input
+                  autoFocus
+                  value={newSpeakerName}
+                  onChange={(e) => setNewSpeakerName(e.target.value)}
+                  onBlur={addSpeaker}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') addSpeaker()
+                    if (e.key === 'Escape') {
+                      setNewSpeakerName('')
+                      setAdding(false)
+                    }
+                  }}
+                  placeholder={t('spk.addName')}
+                  className="h-7 w-36 rounded border border-[hsl(var(--primary)/0.5)] bg-background px-2 text-xs focus:outline-none"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="flex items-center gap-1 rounded-full border border-dashed border-[hsl(var(--border))] px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-[hsl(var(--primary)/0.5)] cursor-pointer"
+                >
+                  <Plus className="size-3" aria-hidden="true" /> {t('spk.add')}
+                </button>
+              )
+            )}
           </div>
           {merge && (
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
@@ -663,18 +703,27 @@ export function TranscriptView({
                       {' '}
                       → {formatTimecode(s.end)}
                     </span>
-                    {s.speaker && speakers.length > 1 && onReassignSegment && (
+                    {onReassignSegment && (speakers.length > 0 || s.speaker) && (
                       <select
-                        value={s.speaker}
-                        onChange={(e) => onReassignSegment(i, e.target.value)}
+                        value={s.speaker ?? ''}
+                        onChange={(e) =>
+                          onReassignSegment(
+                            i,
+                            e.target.value === NEW_SPEAKER
+                              ? nextSpeakerId(result.segments, Object.keys(speakerNames))
+                              : e.target.value,
+                          )
+                        }
                         title={t('tv.reassign')}
                         className="mt-1 block w-full max-w-[110px] rounded border border-[hsl(var(--border))] bg-background px-1 py-0.5 text-[10px] text-muted-foreground focus:outline-none focus:border-[hsl(var(--primary)/0.5)]"
                       >
+                        {!s.speaker && <option value="">{t('spk.none')}</option>}
                         {speakers.map((sp) => (
                           <option key={sp} value={sp}>
                             {displayName(sp)}
                           </option>
                         ))}
+                        <option value={NEW_SPEAKER}>{t('split.newSpeaker')}</option>
                       </select>
                     )}
                   </span>
