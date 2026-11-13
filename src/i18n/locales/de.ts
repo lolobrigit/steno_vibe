@@ -508,6 +508,9 @@ const de: Record<string, string> = {
   "set.ep.convert": "Datei vor dem Senden in Audio (WAV) umwandeln",
   "set.ep.convertNote": "Für Dienste, die nur Audio annehmen: Video und andere Formate werden als WAV 16 kHz mono gesendet (≈ 2 MB pro Minute).",
   "set.ep.asrPath": "Transkriptionspfad (Standard /audio/transcriptions; nur direkter Modus)",
+  "set.ep.addModel": "Modell manuell hinzufügen (ID, z. B. whisper) – Enter",
+  "set.ep.testAsr": "Transkription testen",
+  "set.ep.testOk": "Transkription funktioniert: Der Dienst hat eine Testdatei akzeptiert",
 }
 
 export default de

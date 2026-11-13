@@ -12,6 +12,7 @@
 // CUSTOM_ENDPOINT_PROXY=1).
 
 import { t } from '@/i18n'
+import { encodeWavPcm16 } from '@/lib/audio'
 import type { Segment } from '@/types'
 
 export type EndpointModelKind = 'asr' | 'llm'
@@ -228,4 +229,14 @@ export async function customTranscribe(
     .map((s) => ({ start: s.start, end: s.end, text: (s.text ?? '').trim() }))
     .filter((s) => s.text.length > 0)
   return { text: (json.text ?? '').trim(), segments, language: json.language }
+}
+
+/** Проверка распознавания: отправляет секунду тишины (WAV 16 кГц) и показывает ошибку сервиса, если она есть. */
+export async function probeTranscribe(ep: CustomEndpoint, model: string): Promise<void> {
+  await customTranscribe(ep, model || 'whisper-1', {
+    file: encodeWavPcm16(new Float32Array(16000)),
+    fileName: 'probe.wav',
+    language: null,
+    translate: false,
+  })
 }

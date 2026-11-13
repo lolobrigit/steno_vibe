@@ -50,6 +50,7 @@ import {
   fetchEndpointModels,
   guessModelKind,
   normalizeBaseUrl,
+  probeTranscribe,
   type CustomEndpoint,
   type EndpointModelKind,
 } from '@/lib/customEndpoints'
@@ -306,6 +307,7 @@ export function SettingsModal({
     Record<string, { busy?: boolean; error?: string; note?: string }>
   >({})
   const [epFilter, setEpFilter] = useState<Record<string, string>>({})
+  const [epManual, setEpManual] = useState<Record<string, string>>({})
 
   // --- LLM-кнопки ---
   const builtinButtons = useCallback(
@@ -500,16 +502,36 @@ export function SettingsModal({
     }
     setEpStatus((s) => ({ ...s, [ep.id]: { busy: true } }))
     try {
-      const available = await fetchEndpointModels({ ...ep, baseUrl })
-      // выбранные модели, которых сервис больше не отдаёт, из выбора убираем
-      const models = ep.models.filter((m) => available.includes(m.id))
-      patchEndpoint(ep.id, { baseUrl, available, models })
-      setEpStatus((s) => ({ ...s, [ep.id]: { note: t('set.ep.found', { n: available.length }) } }))
+      const fetched = await fetchEndpointModels({ ...ep, baseUrl })
+      // добавленные вручную модели (у whisper.cpp нет /models) не теряем
+      const available = [...new Set([...fetched, ...ep.models.map((m) => m.id)])]
+      patchEndpoint(ep.id, { baseUrl, available })
+      setEpStatus((s) => ({ ...s, [ep.id]: { note: t('set.ep.found', { n: fetched.length }) } }))
     } catch (e) {
       setEpStatus((s) => ({
         ...s,
         [ep.id]: { error: e instanceof Error ? e.message : String(e) },
       }))
+    }
+  }
+
+  const addManualModel = (ep: CustomEndpoint) => {
+    const id = (epManual[ep.id] ?? '').trim()
+    if (!id) return
+    patchEndpoint(ep.id, {
+      available: ep.available.includes(id) ? ep.available : [...ep.available, id],
+      models: ep.models.some((m) => m.id === id) ? ep.models : [...ep.models, { id, kind: guessModelKind(id) }],
+    })
+    setEpManual((m) => ({ ...m, [ep.id]: '' }))
+  }
+
+  const testAsr = async (ep: CustomEndpoint) => {
+    setEpStatus((s) => ({ ...s, [ep.id]: { busy: true } }))
+    try {
+      await probeTranscribe({ ...ep, baseUrl: normalizeBaseUrl(ep.baseUrl) }, ep.models.find((m) => m.kind === 'asr')?.id ?? '')
+      setEpStatus((s) => ({ ...s, [ep.id]: { note: t('set.ep.testOk') } }))
+    } catch (e) {
+      setEpStatus((s) => ({ ...s, [ep.id]: { error: e instanceof Error ? e.message : String(e) } }))
     }
   }
 
@@ -997,6 +1019,15 @@ export function SettingsModal({
                         )}
                         {t('set.ep.fetch')}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => void testAsr(ep)}
+                        disabled={st.busy || ep.baseUrl.trim().length < 8}
+                        className={primaryBtn}
+                        style={{ color: 'hsl(var(--primary))' }}
+                      >
+                        {t('set.ep.testAsr')}
+                      </button>
                       {st.note && (
                         <span className="text-[11px]" style={{ color: 'hsl(var(--ok))' }}>
                           {st.note}
@@ -1008,6 +1039,19 @@ export function SettingsModal({
                         </span>
                       )}
                     </div>
+                    <input
+                      value={epManual[ep.id] ?? ''}
+                      onChange={(e) => setEpManual((m) => ({ ...m, [ep.id]: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addManualModel(ep)
+                        }
+                      }}
+                      placeholder={t('set.ep.addModel')}
+                      spellCheck={false}
+                      className={`${inputCls} font-mono`}
+                    />
                     {st.error && (
                       <span className="text-[11px] break-words" style={{ color: 'hsl(var(--err))' }}>
                         {st.error}

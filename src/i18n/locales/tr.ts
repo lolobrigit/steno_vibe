@@ -508,6 +508,9 @@ const tr: Record<string, string> = {
   "set.ep.convert": "Göndermeden önce dosyayı ses (WAV) olarak dönüştür",
   "set.ep.convertNote": "Yalnızca ses kabul eden hizmetler için: video ve diğer biçimler 16 kHz mono WAV olarak gönderilir (dakikada ≈ 2 MB).",
   "set.ep.asrPath": "Transkripsiyon yolu (varsayılan /audio/transcriptions; yalnızca doğrudan mod)",
+  "set.ep.addModel": "Modeli elle ekle (kimlik, örn. whisper) — Enter",
+  "set.ep.testAsr": "Transkripsiyonu test et",
+  "set.ep.testOk": "Transkripsiyon çalışıyor: hizmet test dosyasını kabul etti",
 }
 
 export default tr

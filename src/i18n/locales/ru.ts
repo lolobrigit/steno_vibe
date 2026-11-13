@@ -508,6 +508,9 @@ const ru: Record<string, string> = {
   "set.ep.convert": "Конвертировать файл в аудио (WAV) перед отправкой",
   "set.ep.convertNote": "Для сервисов, которые принимают только аудио: видео и другие форматы уходят как WAV 16 кГц моно (≈ 2 МБ в минуту).",
   "set.ep.asrPath": "Путь распознавания (по умолчанию /audio/transcriptions; только прямой режим)",
+  "set.ep.addModel": "Добавить модель вручную (id, например whisper) — Enter",
+  "set.ep.testAsr": "Проверить распознавание",
+  "set.ep.testOk": "Распознавание работает: сервис принял тестовый файл",
 }
 
 export default ru

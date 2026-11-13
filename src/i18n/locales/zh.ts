@@ -508,6 +508,9 @@ const zh: Record<string, string> = {
   "set.ep.convert": "发送前将文件转换为音频（WAV）",
   "set.ep.convertNote": "适用于仅接受音频的服务：视频等格式将以 16 kHz 单声道 WAV 发送（约每分钟 2 MB）。",
   "set.ep.asrPath": "转写路径（默认 /audio/transcriptions；仅直连模式）",
+  "set.ep.addModel": "手动添加模型（ID，例如 whisper）— 回车",
+  "set.ep.testAsr": "测试转写",
+  "set.ep.testOk": "转写正常：服务已接受测试文件",
 }
 
 export default zh
