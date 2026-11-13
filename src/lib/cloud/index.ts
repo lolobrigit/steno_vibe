@@ -8,3 +8,4 @@ export const PROVIDER_LIST: CloudProvider[] = [gdrive, yandex, dropbox]
 export { handleOAuthRedirect, redirectUri } from './oauth'
 export { CloudError } from './types'
 export type { CloudFile, CloudId, CloudProvider, CloudErrorCode } from './types'
+export { probeGoogleServer } from './gdrive'

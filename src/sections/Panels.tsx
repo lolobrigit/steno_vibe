@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react'
 import { FileAudio, HardDrive, Trash2 } from 'lucide-react'
 import { formatBytes, formatDurationShort } from '@/lib/audio'
-import {
-  clearAudioStore,
-  deleteAudio,
-  listAudio,
-  type StoredAudioMeta,
-} from '@/lib/audioStore'
+import { listAudio, type StoredAudioMeta } from '@/lib/audioStore'
+import { StorageModal } from '@/sections/StorageModal'
 import type { HistoryItem } from '@/types'
 import { getLanguage, useT } from '@/i18n'
 
@@ -88,97 +84,46 @@ export function HistoryPanel({ items, onOpen, onRemove, onProjects }: HistoryPan
   )
 }
 
-/** Панель управления сохранёнными аудиофайлами (IndexedDB).
- *  Управление моделями — в отдельном окне настроек (SettingsModal). */
-export function StoragePanel() {
+/** Сводка по локальному хранилищу; подробности и удаление — в большом окне (StorageModal).
+ *  Управление моделями — в окне настроек (SettingsModal). */
+export function StoragePanel({
+  onHistory,
+  onRemoveProject,
+}: {
+  onHistory?: (list: HistoryItem[]) => void
+  onRemoveProject?: (id: string) => void
+}) {
   const [files, setFiles] = useState<StoredAudioMeta[]>([])
   const [open, setOpen] = useState(false)
   const t = useT()
 
-  const refresh = async () => {
-    setFiles(await listAudio())
-  }
-
   useEffect(() => {
-    // счётчик в заголовке — сразу, детали — при раскрытии
-    void refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  useEffect(() => {
-    if (open) void refresh()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void listAudio().then(setFiles)
   }, [open])
 
-  const fileBytes = files.reduce((a, f) => a + f.size, 0)
+  const fileBytes = files.reduce((a, f) => a + f.size + (f.wavSize ?? 0), 0)
 
   return (
     <section className="panel p-4 flex flex-col gap-3" aria-label={t('stor.aria')}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="chrome-label flex items-center gap-2">
           <HardDrive className="size-3.5" style={{ color: 'hsl(var(--primary))' }} aria-hidden="true" />
-          {t('stor.files')} · {formatBytes(fileBytes)}
+          {t('stor.files')} · {files.length} · {formatBytes(fileBytes)}
         </h2>
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
+          onClick={() => setOpen(true)}
           className="btn-console !min-h-8 px-2 text-muted-foreground hover:text-foreground"
         >
-          {open ? t('stor.hide') : t('stor.manage')}
+          {t('stor.manage')}
         </button>
       </div>
-
       {open && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between">
-              <span className="chrome-label !text-[10px]">
-                {t('stor.media')} · {files.length} · {formatBytes(fileBytes)}
-              </span>
-              {files.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void clearAudioStore().then(refresh)}
-                  className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:text-[hsl(var(--err))] cursor-pointer min-h-6"
-                >
-                  {t('stor.deleteAll')}
-                </button>
-              )}
-            </div>
-            {files.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">{t('stor.none')}</p>
-            ) : (
-              <ol className="flex flex-col max-h-36 overflow-y-auto pr-1">
-                {[...files]
-                  .sort((a, b) => b.createdAt - a.createdAt)
-                  .map((f) => (
-                    <li
-                      key={f.id}
-                      className="flex items-center gap-2 py-1 border-t first:border-t-0 border-[hsl(var(--border))]"
-                    >
-                      <span className="font-mono text-[11px] text-foreground/80 truncate flex-1" title={f.name}>
-                        {f.name}
-                      </span>
-                      <span className="font-mono text-[10px] text-muted-foreground shrink-0">
-                        {formatBytes(f.size)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void deleteAudio(f.id).then(refresh)}
-                        aria-label={`${t('common.delete')} ${f.name}`}
-                        className="size-8 shrink-0 inline-flex items-center justify-center text-muted-foreground/60 hover:text-[hsl(var(--err))] cursor-pointer"
-                      >
-                        <Trash2 className="size-3.5" aria-hidden="true" />
-                      </button>
-                    </li>
-                  ))}
-              </ol>
-            )}
-            <p className="text-[11px] text-muted-foreground/80 leading-snug">
-              {t('stor.modelsNote')}
-            </p>
-          </div>
-        </div>
+        <StorageModal
+          onClose={() => setOpen(false)}
+          onHistory={(l) => onHistory?.(l)}
+          onRemoveProject={(id) => onRemoveProject?.(id)}
+        />
       )}
     </section>
   )

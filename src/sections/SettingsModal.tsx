@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BookMarked,
   Check,
   Download,
+  Upload,
   Globe,
   Link2,
   Loader2,
@@ -17,6 +18,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { termsFromCsv, termsToCsv } from '@/lib/glossaryCsv'
+import { downloadFile } from '@/lib/exporters'
 import { AI_ACTIONS, LOCAL_MODELS } from '@/lib/models'
 import { formatBytes } from '@/lib/audio'
 import { modelJobId } from '@/lib/localEngine'
@@ -83,6 +86,37 @@ interface RowInfo {
   partial: number
   /** true/false — известно точно по списку файлов; null — оценка по кэшу */
   complete: boolean | null
+}
+
+/**
+ * Список терминов: пока пользователь печатает, хранится «сырой» текст, иначе
+ * пробел и перенос строки в конце срезались бы сразу (пустые строки отбрасываются
+ * при разборе). Внешние изменения (импорт CSV) подхватываются по смене массива.
+ */
+function TermsEditor({ terms, onChange, placeholder }: { terms: string[]; onChange: (t: string[]) => void; placeholder: string }) {
+  const [text, setText] = useState(terms.join('\n'))
+  const last = useRef(terms)
+  useEffect(() => {
+    if (terms !== last.current) {
+      last.current = terms
+      setText(terms.join('\n'))
+    }
+  }, [terms])
+  return (
+    <textarea
+      value={text}
+      onChange={(e) => {
+        const v = e.target.value
+        setText(v)
+        const next = v.split('\n').map((x) => x.trim()).filter(Boolean)
+        last.current = next
+        onChange(next)
+      }}
+      rows={4}
+      placeholder={placeholder}
+      className="panel-inset px-2.5 py-2 text-xs font-mono bg-transparent text-foreground resize-y min-h-16 focus:outline-none focus-visible:outline-2 focus-visible:outline-[hsl(var(--ring))] w-full"
+    />
+  )
 }
 
 type TabId = 'general' | 'downloads' | 'endpoints' | 'llm-buttons' | 'glossaries'
@@ -489,6 +523,9 @@ export function SettingsModal({
     patchEndpoint(ep.id, { models: ep.models.map((m) => (m.id === id ? { ...m, kind } : m)) })
 
   // --- редакторы справочников и кнопок ---
+  const csvInput = useRef<HTMLInputElement | null>(null)
+  const csvTarget = useRef<string | null>(null)
+
   const addGlossary = () =>
     onGlossaries([
       ...glossaries,
@@ -1122,17 +1159,31 @@ export function SettingsModal({
                       <Trash2 className="size-3.5" aria-hidden="true" />
                     </button>
                   </div>
-                  <textarea
-                    value={g.terms.join('\n')}
-                    onChange={(e) =>
-                      patchGlossary(g.id, {
-                        terms: e.target.value.split('\n').map((t) => t.trim()).filter(Boolean),
-                      })
-                    }
-                    rows={4}
-                    placeholder={'Keycloak\nJWT\nWebSocket\n…'}
-                    className="panel-inset px-2.5 py-2 text-xs font-mono bg-transparent text-foreground resize-y min-h-16 focus:outline-none focus-visible:outline-2 focus-visible:outline-[hsl(var(--ring))] w-full"
+                  <TermsEditor
+                    terms={g.terms}
+                    onChange={(terms) => patchGlossary(g.id, { terms })}
+                    placeholder={'Keycloak\nJWT\nК-клок = Keycloak\n…'}
                   />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        csvTarget.current = g.id
+                        csvInput.current?.click()
+                      }}
+                      className="btn-console !min-h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <Upload className="size-3" aria-hidden="true" /> {t('set.gl.csvAdd')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={g.terms.length === 0}
+                      onClick={() => downloadFile(`${g.name || 'glossary'}.csv`, termsToCsv(g.terms), 'text/csv')}
+                      className="btn-console !min-h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-40"
+                    >
+                      <Download className="size-3" aria-hidden="true" /> {t('set.gl.csvExport')}
+                    </button>
+                  </div>
                 </div>
               ))}
               <button
@@ -1143,6 +1194,38 @@ export function SettingsModal({
               >
                 <Plus className="size-3.5" aria-hidden="true" /> {t('set.gl.add')}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  csvTarget.current = null
+                  csvInput.current?.click()
+                }}
+                className="btn-console !min-h-8 px-3 self-start text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <Upload className="size-3.5" aria-hidden="true" /> {t('set.gl.csvNew')}
+              </button>
+              <input
+                ref={csvInput}
+                type="file"
+                accept=".csv,.txt,text/csv,text/plain"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0]
+                  e.target.value = ''
+                  if (!f) return
+                  const terms = termsFromCsv(await f.text())
+                  const target = csvTarget.current
+                  if (target) {
+                    const g = glossaries.find((x) => x.id === target)
+                    if (g) patchGlossary(g.id, { terms: [...new Set([...g.terms, ...terms])] })
+                  } else {
+                    onGlossaries([
+                      ...glossaries,
+                      { id: crypto.randomUUID(), name: f.name.replace(/\.[^.]+$/, '') || t('set.gl.defaultName', { n: glossaries.length + 1 }), terms },
+                    ])
+                  }
+                }}
+              />
             </>
           )}
         </div>

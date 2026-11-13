@@ -12,6 +12,8 @@ export interface StoredAudioMeta {
   size: number
   type: string
   createdAt: number
+  /** размер сконвертированного WAV, если он сохранён */
+  wavSize?: number
 }
 
 interface StoredAudioRecord extends StoredAudioMeta {
@@ -110,7 +112,10 @@ export async function deleteAudio(id: string): Promise<void> {
 export async function listAudio(): Promise<StoredAudioMeta[]> {
   try {
     const recs = await withStore('readonly', (s) => s.getAll())
-    return (recs as StoredAudioRecord[]).map(({ blob: _blob, ...meta }) => meta)
+    return (recs as StoredAudioRecord[]).map(({ blob: _blob, wav, ...meta }) => ({
+      ...meta,
+      wavSize: wav?.size,
+    }))
   } catch {
     return []
   }
@@ -119,6 +124,18 @@ export async function listAudio(): Promise<StoredAudioMeta[]> {
 export async function clearAudioStore(): Promise<void> {
   try {
     await withStore('readwrite', (s) => s.clear())
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Удалить только сконвертированный WAV (оригинал остаётся; при следующем запуске сконвертируется снова). */
+export async function deleteConvertedWav(id: string): Promise<void> {
+  try {
+    const rec = (await withStore('readonly', (s) => s.get(id))) as StoredAudioRecord | undefined
+    if (!rec?.wav) return
+    const { wav: _wav, ...rest } = rec
+    await withStore('readwrite', (s) => s.put(rest))
   } catch {
     /* ignore */
   }

@@ -3,7 +3,7 @@ import { Cloud, Download, FileUp, HardDriveDownload, Loader2, RefreshCw, X } fro
 import type { HistoryItem } from '@/types'
 import { useT } from '@/i18n'
 import { formatBytes } from '@/lib/audio'
-import { PROVIDER_LIST, PROVIDERS, CloudError, type CloudFile, type CloudId } from '@/lib/cloud'
+import { PROVIDER_LIST, PROVIDERS, CloudError, probeGoogleServer, type CloudFile, type CloudId } from '@/lib/cloud'
 import { PROJECT_EXT, projectFileName } from '@/lib/project'
 import { buildExport, importProject } from '@/lib/projectStore'
 
@@ -76,6 +76,10 @@ export function ProjectsModal({ items, currentId, onClose, onImported }: Props) 
   const abort = useRef<AbortController | null>(null)
 
   useEffect(() => () => abort.current?.abort(), [])
+  // узнаём, включён ли серверный вход в Google (тогда Client ID вводить не нужно)
+  useEffect(() => {
+    void probeGoogleServer().then((on) => on && bump((n) => n + 1))
+  }, [])
 
   const fail = (e: unknown) => {
     if (e instanceof DOMException && e.name === 'AbortError') return
@@ -179,7 +183,10 @@ export function ProjectsModal({ items, currentId, onClose, onImported }: Props) 
     if (!needKey(p)) {
       return (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{p.connected() ? t('prj.connected') : t('prj.notConnected')}</span>
+          <span>
+            {p.connected() ? t('prj.connected') : t('prj.notConnected')}
+            {p.serverManaged?.() && <span className="block text-[11px] opacity-80">{t('prj.serverCreds')}</span>}
+          </span>
           {p.connected() && (
             <button
               type="button"

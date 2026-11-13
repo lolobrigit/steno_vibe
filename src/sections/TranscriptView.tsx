@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   Check,
   Copy,
-  Download,
   GitMerge,
   Layers,
   Link2,
@@ -25,8 +24,9 @@ import {
 import { formatDurationShort, formatTimecode } from '@/lib/audio'
 import { blobToDataUrl, downloadFile, toHtml, toMarkdown, toSrt, toTxt, toTxtStamped, toVtt } from '@/lib/exporters'
 import { DiffModal } from '@/sections/DiffModal'
+import { ExportMenu } from '@/sections/ExportMenu'
 import { activeSegmentIndex, type PlayerHandle } from '@/lib/player'
-import { findInText, findMatches, NEW_SPEAKER, speakersOf } from '@/lib/transcript'
+import { findInText, findMatches, NEW_SPEAKER, speakerColor, speakersOf } from '@/lib/transcript'
 import type { TranscriptResult, TranscriptVersion } from '@/types'
 import { languageName, speakerLabel, useT } from '@/i18n'
 
@@ -80,19 +80,7 @@ interface TranscriptViewProps {
   fill?: boolean
 }
 
-const SPEAKER_COLORS = [
-  'hsl(187 85% 62%)',
-  'hsl(160 64% 55%)',
-  'hsl(43 96% 60%)',
-  'hsl(350 80% 68%)',
-  'hsl(265 70% 72%)',
-]
-
-export function speakerColor(speaker: string): string {
-  let h = 0
-  for (const c of speaker) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return SPEAKER_COLORS[h % SPEAKER_COLORS.length]
-}
+export { speakerColor }
 
 export function TranscriptView({
   result,
@@ -277,8 +265,10 @@ export function TranscriptView({
     }
   }
 
-  const exportDoc = async (kind: 'md' | 'html') => {
-    const docShots = await Promise.all(shots.map(async (s) => ({ time: s.time, dataUrl: await blobToDataUrl(s.blob) })))
+  const buildDoc = async (kind: 'md' | 'html', withShots: boolean): Promise<string> => {
+    const docShots = withShots
+      ? await Promise.all(shots.map(async (s) => ({ time: s.time, dataUrl: await blobToDataUrl(s.blob) })))
+      : []
     const opts = {
       title: baseName,
       segments: result.segments,
@@ -287,8 +277,7 @@ export function TranscriptView({
       shots: docShots,
       noteLabel: t('note.label'),
     }
-    if (kind === 'md') downloadFile(`${baseName}.md`, toMarkdown(opts), 'text/markdown')
-    else downloadFile(`${baseName}.html`, toHtml(opts), 'text/html')
+    return kind === 'md' ? toMarkdown(opts) : toHtml(opts)
   }
 
   const displayName = (sp: string) => speakerNames[sp]?.trim() || speakerLabel(sp)
@@ -924,35 +913,15 @@ export function TranscriptView({
           )}
           {copied ? t('common.copied') : t('common.copy')}
         </button>
-        <button
-          type="button"
-          className={exportBtn}
-          onClick={() => downloadFile(`${baseName}.txt`, exportText())}
-        >
-          <Download className="size-4" aria-hidden="true" /> TXT
-        </button>
-        <button
-          type="button"
-          className={exportBtn}
-          disabled={!hasSegments}
-          onClick={() => downloadFile(`${baseName}.srt`, toSrt(result.segments))}
-        >
-          <Download className="size-4" aria-hidden="true" /> SRT
-        </button>
-        <button
-          type="button"
-          className={exportBtn}
-          disabled={!hasSegments}
-          onClick={() => downloadFile(`${baseName}.vtt`, toVtt(result.segments), 'text/vtt')}
-        >
-          <Download className="size-4" aria-hidden="true" /> VTT
-        </button>
-        <button type="button" className={exportBtn} onClick={() => void exportDoc('md')} title={t('exp.mdHint')}>
-          <Download className="size-4" aria-hidden="true" /> MD
-        </button>
-        <button type="button" className={exportBtn} onClick={() => void exportDoc('html')} title={t('exp.htmlHint')}>
-          <Download className="size-4" aria-hidden="true" /> HTML
-        </button>
+        <ExportMenu
+          hasSegments={hasSegments}
+          baseName={baseName}
+          shotsCount={shots.length}
+          onTxt={() => downloadFile(`${baseName}.txt`, exportText())}
+          onSrt={() => downloadFile(`${baseName}.srt`, toSrt(result.segments))}
+          onVtt={() => downloadFile(`${baseName}.vtt`, toVtt(result.segments), 'text/vtt')}
+          buildDoc={buildDoc}
+        />
       </div>
     </div>
   )

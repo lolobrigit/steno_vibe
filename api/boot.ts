@@ -10,6 +10,7 @@ import { Paths } from "@contracts/constants";
 import { log } from "./lib/logger";
 import { handleClientLog } from "./lib/clientlog";
 import { proxyRoutes } from "./routes/proxy";
+import { googleRoutes } from "./routes/google";
 import { REQUEST_ID_HEADER, runWithRequestId } from "./lib/requestcontext";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
@@ -79,6 +80,7 @@ app.post(
   handleClientLog,
 );
 app.route("/api/proxy", proxyRoutes);
+app.route("/api/google", googleRoutes);
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 // Unhandled request errors must reach /tmp/kimi-logs/app.log, not just stdout:
