@@ -308,6 +308,7 @@ export function SettingsModal({
   >({})
   const [epFilter, setEpFilter] = useState<Record<string, string>>({})
   const [epManual, setEpManual] = useState<Record<string, string>>({})
+  const [epManualKind, setEpManualKind] = useState<Record<string, EndpointModelKind>>({})
 
   // --- LLM-кнопки ---
   const builtinButtons = useCallback(
@@ -520,7 +521,10 @@ export function SettingsModal({
     if (!id) return
     patchEndpoint(ep.id, {
       available: ep.available.includes(id) ? ep.available : [...ep.available, id],
-      models: ep.models.some((m) => m.id === id) ? ep.models : [...ep.models, { id, kind: guessModelKind(id) }],
+      // вручную добавляют чаще распознавание (у whisper.cpp нет /models): по умолчанию «распознавание»
+      models: ep.models.some((m) => m.id === id)
+        ? ep.models.map((m) => (m.id === id ? { ...m, kind: epManualKind[ep.id] ?? 'asr' } : m))
+        : [...ep.models, { id, kind: epManualKind[ep.id] ?? 'asr' }],
     })
     setEpManual((m) => ({ ...m, [ep.id]: '' }))
   }
@@ -1039,6 +1043,7 @@ export function SettingsModal({
                         </span>
                       )}
                     </div>
+                    <div className="flex items-center gap-2">
                     <input
                       value={epManual[ep.id] ?? ''}
                       onChange={(e) => setEpManual((m) => ({ ...m, [ep.id]: e.target.value }))}
@@ -1050,8 +1055,18 @@ export function SettingsModal({
                       }}
                       placeholder={t('set.ep.addModel')}
                       spellCheck={false}
-                      className={`${inputCls} font-mono`}
+                      className={`${inputCls} font-mono flex-1 min-w-0`}
                     />
+                      <select
+                        value={epManualKind[ep.id] ?? 'asr'}
+                        onChange={(e) => setEpManualKind((k) => ({ ...k, [ep.id]: e.target.value as EndpointModelKind }))}
+                        title={t('set.ep.kind')}
+                        className="panel-inset px-1.5 py-2 text-[11px] bg-transparent text-foreground shrink-0 focus:outline-none"
+                      >
+                        <option value="asr">{t('set.ep.kind.asr')}</option>
+                        <option value="llm">{t('set.ep.kind.llm')}</option>
+                      </select>
+                    </div>
                     {st.error && (
                       <span className="text-[11px] break-words" style={{ color: 'hsl(var(--err))' }}>
                         {st.error}
