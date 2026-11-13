@@ -504,6 +504,10 @@ const zh: Record<string, string> = {
   "stor.deleteVersion": "删除版本",
   "stor.activeKeep": "无法删除当前版本",
   "stor.orphans": "无项目的文件",
+  "ep.err.path": "服务在 {url} 返回 {status}：{detail}。请检查地址（通常以 /v1 结尾）以及服务设置中的转写路径。",
+  "set.ep.convert": "发送前将文件转换为音频（WAV）",
+  "set.ep.convertNote": "适用于仅接受音频的服务：视频等格式将以 16 kHz 单声道 WAV 发送（约每分钟 2 MB）。",
+  "set.ep.asrPath": "转写路径（默认 /audio/transcriptions；仅直连模式）",
 }
 
 export default zh

@@ -486,6 +486,7 @@ export function SettingsModal({
         baseUrl: '',
         apiKey: '',
         viaProxy: false,
+        convertAudio: true,
         models: [],
         available: [],
       },
@@ -961,6 +962,26 @@ export function SettingsModal({
                       />
                       {t('set.ep.proxy')}
                     </label>
+                    <label className="flex items-start gap-2 text-[11px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={!!ep.convertAudio}
+                        onChange={(e) => patchEndpoint(ep.id, { convertAudio: e.target.checked })}
+                        className="size-4 mt-0.5 accent-[hsl(var(--primary))]"
+                      />
+                      <span>
+                        {t('set.ep.convert')}
+                        <span className="block text-muted-foreground/70">{t('set.ep.convertNote')}</span>
+                      </span>
+                    </label>
+                    <input
+                      value={ep.asrPath ?? ''}
+                      onChange={(e) => patchEndpoint(ep.id, { asrPath: e.target.value })}
+                      placeholder={t('set.ep.asrPath')}
+                      disabled={ep.viaProxy}
+                      spellCheck={false}
+                      className={`${inputCls} font-mono disabled:opacity-50`}
+                    />
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"

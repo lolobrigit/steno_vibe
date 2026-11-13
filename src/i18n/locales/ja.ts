@@ -504,6 +504,10 @@ const ja: Record<string, string> = {
   "stor.deleteVersion": "バージョンを削除",
   "stor.activeKeep": "現在のバージョンは削除できません",
   "stor.orphans": "プロジェクトのないファイル",
+  "ep.err.path": "サービスが {url} に対して {status} を返しました: {detail}。アドレス（通常は /v1 で終わります）とサービス設定の文字起こしパスを確認してください。",
+  "set.ep.convert": "送信前にファイルを音声（WAV）に変換する",
+  "set.ep.convertNote": "音声のみ受け付けるサービス向け：動画などは 16 kHz モノラルの WAV で送信されます（1分あたり約2 MB）。",
+  "set.ep.asrPath": "文字起こしパス（既定 /audio/transcriptions、直接モードのみ）",
 }
 
 export default ja

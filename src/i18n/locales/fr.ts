@@ -504,6 +504,10 @@ const fr: Record<string, string> = {
   "stor.deleteVersion": "Supprimer la version",
   "stor.activeKeep": "La version active ne peut pas être supprimée",
   "stor.orphans": "Fichiers sans projet",
+  "ep.err.path": "Le service a répondu {status} pour {url} : {detail}. Vérifiez l’adresse (se termine souvent par /v1) et le chemin de transcription dans les réglages du service.",
+  "set.ep.convert": "Convertir le fichier en audio (WAV) avant l’envoi",
+  "set.ep.convertNote": "Pour les services n’acceptant que l’audio : la vidéo et les autres formats sont envoyés en WAV 16 kHz mono (≈ 2 Mo par minute).",
+  "set.ep.asrPath": "Chemin de transcription (par défaut /audio/transcriptions ; mode direct uniquement)",
 }
 
 export default fr
