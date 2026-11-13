@@ -511,6 +511,8 @@ const it: Record<string, string> = {
   "set.ep.addModel": "Aggiungi un modello manualmente (id, es. whisper) — Invio",
   "set.ep.testAsr": "Prova la trascrizione",
   "set.ep.testOk": "La trascrizione funziona: il servizio ha accettato un file di prova",
+  "eng.wordsService": "Richiesti al servizio (timestamp_granularities=word); funziona solo se il servizio lo supporta.",
+  "eng.noAsrHint": "I tuoi servizi non hanno modelli di riconoscimento vocale. Apri impostazioni → Servizi e imposta il tipo di modello su {kind}.",
 }
 
 export default it

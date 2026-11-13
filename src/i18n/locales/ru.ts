@@ -511,6 +511,8 @@ const ru: Record<string, string> = {
   "set.ep.addModel": "Добавить модель вручную (id, например whisper) — Enter",
   "set.ep.testAsr": "Проверить распознавание",
   "set.ep.testOk": "Распознавание работает: сервис принял тестовый файл",
+  "eng.wordsService": "Запрашиваются у сервиса (timestamp_granularities=word); работает, только если сервис это поддерживает.",
+  "eng.noAsrHint": "У ваших сервисов нет моделей распознавания. Откройте настройки → Сервисы и укажите тип модели {kind}.",
 }
 
 export default ru

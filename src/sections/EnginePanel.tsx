@@ -162,6 +162,15 @@ export function EnginePanel(p: EnginePanelProps) {
               ))}
             </select>
           </label>
+          {p.endpoints.length > 0 && asrEndpoints.length === 0 && (
+            <button
+              type="button"
+              onClick={p.onOpenSettings}
+              className="text-left text-[11px] leading-relaxed px-1 text-[hsl(var(--warn))] underline decoration-dotted cursor-pointer"
+            >
+              {t('eng.noAsrHint', { kind: t('set.ep.kind.asr') })}
+            </button>
+          )}
           {custom ? (
             <div className="panel-inset px-3 py-2.5 text-xs flex flex-col gap-1.5">
               <span className="chrome-label !text-[10px] truncate" title={custom.endpoint.baseUrl}>
@@ -248,7 +257,7 @@ export function EnginePanel(p: EnginePanelProps) {
         )}
       </div>
 
-      {settings.mode === 'local' && (
+      {(settings.mode === 'local' || !!custom) && (
         <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer px-1">
           <input
             type="checkbox"
@@ -259,7 +268,7 @@ export function EnginePanel(p: EnginePanelProps) {
           />
           <span>
             {t('eng.words')}
-            <span className="block text-[11px] opacity-80">{t('eng.wordsNote')}</span>
+            <span className="block text-[11px] opacity-80">{t(custom ? 'eng.wordsService' : 'eng.wordsNote')}</span>
           </span>
         </label>
       )}

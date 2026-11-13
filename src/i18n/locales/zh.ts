@@ -511,6 +511,8 @@ const zh: Record<string, string> = {
   "set.ep.addModel": "手动添加模型（ID，例如 whisper）— 回车",
   "set.ep.testAsr": "测试转写",
   "set.ep.testOk": "转写正常：服务已接受测试文件",
+  "eng.wordsService": "向服务请求（timestamp_granularities=word）；仅在服务支持时有效。",
+  "eng.noAsrHint": "您的服务没有语音识别模型。请打开设置 → 服务，将模型类型设为{kind}。",
 }
 
 export default zh

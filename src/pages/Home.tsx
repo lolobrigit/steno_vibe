@@ -556,6 +556,8 @@ export default function Home() {
             language: lang,
             translate: settings.translate,
             prompt: glossHint || undefined,
+            wordTimestamps: settings.wordTimestamps,
+            durationSec: decoded?.durationSec,
             signal,
           })
         : await transcribeCloud({

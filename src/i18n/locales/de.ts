@@ -511,6 +511,8 @@ const de: Record<string, string> = {
   "set.ep.addModel": "Modell manuell hinzufügen (ID, z. B. whisper) – Enter",
   "set.ep.testAsr": "Transkription testen",
   "set.ep.testOk": "Transkription funktioniert: Der Dienst hat eine Testdatei akzeptiert",
+  "eng.wordsService": "Wird beim Dienst angefordert (timestamp_granularities=word); funktioniert nur, wenn der Dienst es unterstützt.",
+  "eng.noAsrHint": "Ihre Dienste haben keine Spracherkennungsmodelle. Öffnen Sie Einstellungen → Dienste und setzen Sie den Modelltyp auf {kind}.",
 }
 
 export default de

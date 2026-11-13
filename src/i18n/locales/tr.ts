@@ -511,6 +511,8 @@ const tr: Record<string, string> = {
   "set.ep.addModel": "Modeli elle ekle (kimlik, örn. whisper) — Enter",
   "set.ep.testAsr": "Transkripsiyonu test et",
   "set.ep.testOk": "Transkripsiyon çalışıyor: hizmet test dosyasını kabul etti",
+  "eng.wordsService": "Hizmetten istenir (timestamp_granularities=word); yalnızca hizmet destekliyorsa çalışır.",
+  "eng.noAsrHint": "Hizmetlerinizde konuşma tanıma modeli yok. Ayarlar → Hizmetler bölümünü açıp model türünü {kind} yapın.",
 }
 
 export default tr
