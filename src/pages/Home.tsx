@@ -1420,8 +1420,8 @@ export default function Home() {
               </section>
             )}
 
-            {!expanded && (
-              <div className={`min-h-[320px] lg:min-h-0 lg:flex-1 ${mobileTab === 'ai' ? '' : 'max-lg:hidden'}`}>
+            {/* Панель остаётся в дереве и при увеличенном видео: в ней живёт результат LLM, размонтирование его теряло */}
+            <div className={`min-h-[320px] lg:min-h-0 lg:flex-1 ${mobileTab === 'ai' ? '' : 'max-lg:hidden'} ${expanded ? 'hidden' : ''}`}>
                 {showAi && result ? (
                   <AiPanel
                     fill
@@ -1446,7 +1446,6 @@ export default function Home() {
                   </section>
                 )}
               </div>
-            )}
           </div>
 
           <section
