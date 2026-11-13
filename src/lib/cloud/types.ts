@@ -46,6 +46,8 @@ export interface CloudProvider {
   /** ключ приложения: из сборки или введённый пользователем */
   credential(): string
   setCredential(v: string): void
+  /** вход выполняет сервер (его креды), ключ вводить не нужно */
+  serverManaged?(): boolean
   connected(): boolean
   connect(): Promise<void>
   disconnect(): void

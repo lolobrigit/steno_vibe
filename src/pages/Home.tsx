@@ -1316,7 +1316,7 @@ export default function Home() {
           {stage === 'start' && (
             <div className="grid gap-4 md:grid-cols-2 items-start">
               {historyPanel}
-              <StoragePanel />
+              <StoragePanel onHistory={setHistory} onRemoveProject={removeHistoryEntry} />
             </div>
           )}
         </main>
@@ -1357,13 +1357,13 @@ export default function Home() {
                   : flyout === 'history'
                     ? historyPanel
                     : flyout === 'storage'
-                      ? <StoragePanel />
+                      ? <StoragePanel onHistory={setHistory} onRemoveProject={removeHistoryEntry} />
                       : null
             }
           />
 
           <div className="flex flex-col gap-3 min-w-0 min-h-0 lg:h-full lg:overflow-y-auto">
-            <section className="panel p-3 shrink-0" aria-label={tr('main.aria')}>
+            <section className={`panel p-3 shrink-0 ${llmOpen ? 'lg:hidden' : ''}`} aria-label={tr('main.aria')}>
               {runBar(true)}
             </section>
 

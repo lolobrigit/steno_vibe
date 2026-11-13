@@ -476,3 +476,20 @@ export function segmentsFromWords(
   flush()
   return out
 }
+
+// ── Цвета спикеров ───────────────────────────────────────────────
+
+const SPEAKER_COLORS = [
+  'hsl(187 85% 62%)',
+  'hsl(160 64% 55%)',
+  'hsl(43 96% 60%)',
+  'hsl(350 80% 68%)',
+  'hsl(265 70% 72%)',
+]
+
+export function speakerColor(speaker: string): string {
+  let h = 0
+  for (const c of speaker) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return SPEAKER_COLORS[h % SPEAKER_COLORS.length]
+}
+

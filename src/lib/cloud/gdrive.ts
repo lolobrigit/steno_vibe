@@ -1,5 +1,6 @@
 import { clearToken, getCredential, getToken, setCredential, setToken } from './config'
 import { json, ok, xhr } from './http'
+import { newState, popupFlow } from './oauth'
 import { CloudError, type CloudFile, type CloudProvider, type Progress } from './types'
 
 const API = 'https://www.googleapis.com/drive/v3'
@@ -56,7 +57,37 @@ function token(): string {
 }
 const auth = () => ({ Authorization: `Bearer ${token()}` })
 
+/** Включён ли вход через серверные креды (заданы GOOGLE_CLIENT_ID/SECRET на сервере). */
+let serverEnabled: boolean | null = null
+export async function probeGoogleServer(): Promise<boolean> {
+  if (serverEnabled !== null) return serverEnabled
+  try {
+    const res = await xhr({ method: 'GET', url: `${import.meta.env.BASE_URL}api/google/status` })
+    const j = JSON.parse(String(res.body)) as { enabled?: boolean }
+    serverEnabled = res.status === 200 && !!j.enabled
+  } catch {
+    serverEnabled = false
+  }
+  return serverEnabled
+}
+
+/** Вход через сервер: всплывающее окно → сервер меняет код на токен (секрет остаётся на сервере). */
+async function connectViaServer() {
+  const state = newState()
+  const url = `${import.meta.env.BASE_URL}api/google/start?${new URLSearchParams({
+    state,
+    base: import.meta.env.BASE_URL,
+  })}`
+  const p = await popupFlow(url, state)
+  const t = p.get('access_token')
+  if (!t) throw new CloudError('denied', p.get('error_description') ?? '')
+  setToken('gdrive', t, Number(p.get('expires_in')) || 3600)
+}
+
 async function connect() {
+  if (serverEnabled === null) await probeGoogleServer()
+  // свой Client ID, введённый пользователем, главнее серверного
+  if (serverEnabled && !getCredential('gdrive')) return connectViaServer()
   const id = getCredential('gdrive')
   if (!id) throw new CloudError('no-credential')
   await loadGis()
@@ -157,7 +188,9 @@ export const gdrive: CloudProvider = {
   label: 'Google Drive',
   credentialLabel: 'OAuth Client ID',
   consoleUrl: 'https://console.cloud.google.com/apis/credentials',
-  credential: () => getCredential('gdrive'),
+  // 'server' — маркер «ключ не нужен, вход выполняет сервер»
+  credential: () => getCredential('gdrive') || (serverEnabled ? 'server' : ''),
+  serverManaged: () => !!serverEnabled && !getCredential('gdrive'),
   setCredential: (v) => setCredential('gdrive', v),
   connected: () => !!getToken('gdrive'),
   connect,

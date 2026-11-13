@@ -4,6 +4,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { Camera, Captions, Pause, Play } from 'lucide-react'
+import { speakerColor } from '@/lib/transcript'
 import { formatTimecode } from '@/lib/audio'
 import type { Segment } from '@/types'
 import { useT } from '@/i18n'
@@ -96,10 +97,11 @@ export function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number
   ctx.beginPath()
   ctx.roundRect(x0, y0, boxW, boxH, size * 0.5)
   ctx.fill()
+  const hot = seg.speaker ? speakerColor(seg.speaker) : '#fde68a'
   let y = y0 + size * 0.4
   if (who) {
     ctx.font = `600 ${Math.round(size * 0.6)}px system-ui, sans-serif`
-    ctx.fillStyle = '#7dd3fc'
+    ctx.fillStyle = hot
     ctx.textAlign = 'center'
     ctx.fillText(who.toUpperCase(), w / 2, y + size * 0.4)
     y += size * 0.8
@@ -110,7 +112,7 @@ export function drawSubtitle(ctx: CanvasRenderingContext2D, w: number, h: number
     const total = line.reduce((a, x) => a + x.w + space, 0) - space
     let x = (w - total) / 2
     for (const it of line) {
-      ctx.fillStyle = it.i <= upto ? '#fde68a' : '#ffffff'
+      ctx.fillStyle = it.i <= upto ? hot : '#ffffff'
       ctx.fillText(words[it.i], x, y + lineH / 2)
       x += it.w + space
     }
@@ -425,17 +427,19 @@ export const MediaPlayerBar = forwardRef<
 /** Субтитр поверх видео: плашка как активная реплика в расшифровке, слова подсвечиваются по мере речи. */
 function SubtitleOverlay({ seg, time, who }: { seg: Segment; time: number; who?: string }) {
   const { words, upto } = activeWords(seg, time)
+  // подсветка произнесённых слов — цветом спикера, как в расшифровке
+  const hot = seg.speaker ? speakerColor(seg.speaker) : 'hsl(43 96% 75%)'
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
       <div className="max-w-[92%] rounded-lg px-3 py-1.5 text-center bg-[rgba(8,10,20,0.78)] ring-1 ring-[hsl(var(--primary)/0.4)] backdrop-blur-sm">
         {who && (
-          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--primary))] leading-tight">
+          <div className="font-mono text-[10px] uppercase tracking-[0.16em] leading-tight" style={{ color: hot }}>
             {who}
           </div>
         )}
         <div className="font-semibold leading-snug text-[clamp(12px,1.5vw,19px)] text-white [text-shadow:0_1px_2px_rgba(0,0,0,.6)]">
           {words.map((w, i) => (
-            <span key={i} className={i <= upto ? 'text-amber-200' : undefined}>
+            <span key={i} style={i <= upto ? { color: hot } : undefined}>
               {w}{' '}
             </span>
           ))}
