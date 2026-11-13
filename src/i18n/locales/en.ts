@@ -538,6 +538,8 @@ const en: Record<string, string> = {
   "set.ep.addModel": "Add a model manually (id, e.g. whisper) — Enter",
   "set.ep.testAsr": "Test transcription",
   "set.ep.testOk": "Transcription works: the service accepted a test file",
+  "eng.wordsService": "Requested from the service (timestamp_granularities=word); works only if the service supports it.",
+  "eng.noAsrHint": "Your services have no speech-recognition models. Open settings → Services and set the model type to {kind}.",
 }
 
 export default en

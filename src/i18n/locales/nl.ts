@@ -511,6 +511,8 @@ const nl: Record<string, string> = {
   "set.ep.addModel": "Model handmatig toevoegen (id, bijv. whisper) — Enter",
   "set.ep.testAsr": "Transcriptie testen",
   "set.ep.testOk": "Transcriptie werkt: de service accepteerde een testbestand",
+  "eng.wordsService": "Wordt bij de service opgevraagd (timestamp_granularities=word); werkt alleen als de service dit ondersteunt.",
+  "eng.noAsrHint": "Je services hebben geen spraakherkenningsmodellen. Open instellingen → Services en stel het modeltype in op {kind}.",
 }
 
 export default nl

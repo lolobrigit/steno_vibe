@@ -511,6 +511,8 @@ const id: Record<string, string> = {
   "set.ep.addModel": "Tambah model secara manual (id, mis. whisper) — Enter",
   "set.ep.testAsr": "Uji transkripsi",
   "set.ep.testOk": "Transkripsi berfungsi: layanan menerima file uji",
+  "eng.wordsService": "Diminta dari layanan (timestamp_granularities=word); hanya berfungsi jika layanan mendukungnya.",
+  "eng.noAsrHint": "Layanan Anda tidak punya model pengenalan suara. Buka pengaturan → Layanan dan atur jenis model ke {kind}.",
 }
 
 export default id

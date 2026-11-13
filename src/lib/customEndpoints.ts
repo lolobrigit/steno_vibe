@@ -189,7 +189,30 @@ export async function customChat(
 interface VerboseJson {
   text?: string
   language?: string
-  segments?: Array<{ start: number; end: number; text: string }>
+  duration?: number
+  segments?: Array<{ start: number; end: number; text: string; words?: RawWord[] }>
+  words?: RawWord[]
+}
+
+/** Слово в ответах разных сервисов: OpenAI — `word`, whisper.cpp — `word` или `text`. */
+interface RawWord {
+  word?: string
+  text?: string
+  start: number
+  end: number
+}
+
+/** Нет сегментов (формат json без таймкодов): режем текст на предложения, время — пропорционально длине. */
+export function sentencesToSegments(text: string, durationSec: number): Segment[] {
+  const parts = text.match(/[^.!?…。！？]+[.!?…。！？]*\s*/g)?.map((x) => x.trim()).filter(Boolean) ?? []
+  if (parts.length === 0 || !(durationSec > 0)) return text ? [{ start: 0, end: Math.max(durationSec, 0), text }] : []
+  const total = parts.reduce((a, x) => a + x.length, 0)
+  let at = 0
+  return parts.map((x) => {
+    const start = at
+    at += (x.length / total) * durationSec
+    return { start, end: at, text: x }
+  })
 }
 
 export async function customTranscribe(
@@ -201,11 +224,19 @@ export async function customTranscribe(
     language: string | null
     translate: boolean
     prompt?: string
+    /** просить пословные метки (timestamp_granularities[]=word) */
+    wordTimestamps?: boolean
+    /** длительность файла: нужна, чтобы разбить ответ без таймкодов */
+    durationSec?: number
     signal?: AbortSignal
   },
 ): Promise<{ text: string; segments: Segment[]; language?: string }> {
   const form = (format: string) => {
     const f = new FormData()
+    if (o.wordTimestamps && format === 'verbose_json') {
+      f.append('timestamp_granularities[]', 'word')
+      f.append('timestamp_granularities[]', 'segment')
+    }
     f.append('file', o.file, o.fileName)
     f.append('model', model)
     f.append('response_format', format)
@@ -225,9 +256,23 @@ export async function customTranscribe(
     })
   }
   const json = (await res.json()) as VerboseJson
-  const segments = (json.segments ?? [])
+  const toWord = (w: RawWord) => ({ text: (w.word ?? w.text ?? '').trim(), start: w.start, end: w.end })
+  const allWords = [...(json.words ?? []), ...(json.segments ?? []).flatMap((s) => s.words ?? [])]
+    .map(toWord)
+    .filter((w) => w.text && Number.isFinite(w.start) && Number.isFinite(w.end))
+  let segments: Segment[] = (json.segments ?? [])
     .map((s) => ({ start: s.start, end: s.end, text: (s.text ?? '').trim() }))
     .filter((s) => s.text.length > 0)
+  if (o.wordTimestamps && allWords.length > 0) {
+    // слова раскладываем по репликам по времени (середина слова внутри реплики)
+    segments = segments.map((seg) => {
+      const words = allWords.filter((w) => (w.start + w.end) / 2 >= seg.start && (w.start + w.end) / 2 < seg.end + 0.001)
+      return words.length ? { ...seg, words } : seg
+    })
+  }
+  if (segments.length === 0 && (json.text ?? '').trim()) {
+    segments = sentencesToSegments((json.text ?? '').trim(), o.durationSec ?? json.duration ?? 0)
+  }
   return { text: (json.text ?? '').trim(), segments, language: json.language }
 }
 

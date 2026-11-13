@@ -511,6 +511,8 @@ const ja: Record<string, string> = {
   "set.ep.addModel": "モデルを手動で追加（ID、例: whisper）— Enter",
   "set.ep.testAsr": "文字起こしをテスト",
   "set.ep.testOk": "文字起こしは動作しています：サービスがテストファイルを受け付けました",
+  "eng.wordsService": "サービスに要求します（timestamp_granularities=word）。サービスが対応している場合のみ動作します。",
+  "eng.noAsrHint": "サービスに音声認識モデルがありません。設定 → サービスを開き、モデルの種類を{kind}にしてください。",
 }
 
 export default ja
