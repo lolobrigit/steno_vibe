@@ -1,6 +1,7 @@
 import type { CloudProvider, HistoryItem } from '@/types'
 import { deleteAudio } from './audioStore'
 import { deleteVersions } from './versionStore'
+import { flatToEntry, entryToFlat, entriesFromCsv, entriesToCsv } from './glossaryCsv'
 
 const KEYS = 'steno.keys.v1'
 const HISTORY = 'steno.history.v1'
@@ -47,11 +48,29 @@ export interface AppSettings {
   glossaryIds: string[]
 }
 
-/** Справочник терминов: одна строка = один термин (можно «слово = расшифровка»). */
+/**
+ * Одна строка справочника. `term` — как термин звучит/пишется в речи;
+ * `replacement` — каноническая форма (как должно быть в тексте);
+ * `note` — свободное пояснение (категория, определение, пример) — столбцом
+ * уходит в промпт LLM, но не в initial_prompt Whisper.
+ */
+export interface GlossaryEntry {
+  term: string
+  replacement?: string
+  note?: string
+}
+
+/**
+ * Справочник терминов. Раньше хранился как `terms: string[]` (плоские строки
+ * вида «слово = расшифровка»); теперь — `entries` с тремя колонками. Старые
+ * записи мигрируют в `entries` при загрузке, поле `terms` удаляется.
+ */
 export interface Glossary {
   id: string
   name: string
-  terms: string[]
+  entries: GlossaryEntry[]
+  /** @deprecated legacy flat strings «a = b»; мигрирует в entries при загрузке */
+  terms?: string[]
 }
 
 /** Пользовательская LLM-кнопка (промпт). */
@@ -188,10 +207,46 @@ const GLOSSARIES = 'steno.glossaries.v1'
 const LLM_BUTTONS = 'steno.llm-buttons.v1'
 const LLM_MODEL = 'steno.llm-model.v1'
 
+/**
+ * Миграция старого формата `terms: string[]` → `entries: GlossaryEntry[]`.
+ * Плоская строка «a = b» разбирается в { term: a, replacement: b }.
+ * Если `entries` уже есть — миграция не трогает их (но дедуплицирует по term).
+ */
+function migrateGlossary(g: Glossary): Glossary {
+  const legacy = g.terms
+  if (!legacy || !legacy.length) {
+    const { terms: _drop, ...rest } = g
+    return { ...rest, entries: dedupeEntries(g.entries ?? []) }
+  }
+  const fromLegacy = legacy.map(flatToEntry)
+  const merged = dedupeEntries([...(g.entries ?? []), ...fromLegacy])
+  const { terms: _drop, ...rest } = g
+  return { ...rest, entries: merged }
+}
+
+function dedupeEntries(entries: GlossaryEntry[]): GlossaryEntry[] {
+  const seen = new Map<string, GlossaryEntry>()
+  for (const e of entries) {
+    const term = e.term.trim()
+    if (!term) continue
+    const prev = seen.get(term.toLowerCase())
+    if (!prev) seen.set(term.toLowerCase(), { ...e, term })
+    // при дубликате сохраняем более полное описание
+    else {
+      prev.replacement ??= e.replacement
+      prev.note ??= e.note
+    }
+  }
+  return [...seen.values()]
+}
+
 export function loadGlossaries(): Glossary[] {
   try {
     const raw = localStorage.getItem(GLOSSARIES)
-    if (raw) return JSON.parse(raw) as Glossary[]
+    if (raw) {
+      const list = JSON.parse(raw) as Glossary[]
+      return list.map(migrateGlossary)
+    }
   } catch {
     /* ignore */
   }
@@ -199,7 +254,9 @@ export function loadGlossaries(): Glossary[] {
 }
 
 export function saveGlossaries(list: Glossary[]) {
-  localStorage.setItem(GLOSSARIES, JSON.stringify(list))
+  // поле `terms` больше не пишем — только `entries`
+  const clean = list.map(({ terms: _drop, ...rest }) => rest)
+  localStorage.setItem(GLOSSARIES, JSON.stringify(clean))
 }
 
 export function loadLlmButtons(): LlmButton[] | null {
@@ -228,9 +285,48 @@ export function saveLlmModel(id: string) {
   localStorage.setItem(LLM_MODEL, id)
 }
 
-/** Термины выбранных справочников одной строкой — для initial_prompt Whisper. */
+/**
+ * Термины выбранных справочников одной строкой — для initial_prompt Whisper
+ * и поля `prompt` облачных ASR. Только term и replacement (без note):
+ * «Keycloak, К-клок = Keycloak, JWT».
+ */
 export function glossaryPromptText(glossaries: Glossary[], ids: string[]): string {
-  const terms = glossaries.filter((g) => ids.includes(g.id)).flatMap((g) => g.terms)
-  const uniq = [...new Set(terms.map((t) => t.trim()).filter(Boolean))]
-  return uniq.join(', ')
+  const tokens = glossaries
+    .filter((g) => ids.includes(g.id))
+    .flatMap((g) => g.entries)
+    .map((e) => entryToFlat(e).trim())
+    .filter(Boolean)
+  return [...new Set(tokens)].join(', ')
 }
+
+/**
+ * Термины выбранных справочников в виде markdown-таблицы — для промпта LLM.
+ * Колонки: term, replacement (если хоть у кого-то есть replacement) и note
+ * (если хоть у кого-то есть note). Пустые ячейки остаются пустыми. Если ни у
+ * одного термина нет replacement и note — возвращается простая строка через
+ * запятую (как раньше), чтобы не плодить таблицу из одной колонки.
+ */
+export function glossaryTableText(glossaries: Glossary[], ids: string[]): string {
+  const entries = glossaries
+    .filter((g) => ids.includes(g.id))
+    .flatMap((g) => g.entries)
+    .filter((e) => e.term.trim())
+  const uniq = dedupeEntries(entries)
+  if (!uniq.length) return ''
+  const hasReplacement = uniq.some((e) => e.replacement?.trim())
+  const hasNote = uniq.some((e) => e.note?.trim())
+  if (!hasReplacement && !hasNote) return uniq.map((e) => e.term.trim()).join(', ')
+  const cols = ['term', ...(hasReplacement ? ['replacement'] : []), ...(hasNote ? ['note'] : [])]
+  const esc = (s: string | undefined) => (s ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ').trim()
+  const row = (e: GlossaryEntry) =>
+    '| ' +
+    [esc(e.term), ...(hasReplacement ? [esc(e.replacement)] : []), ...(hasNote ? [esc(e.note)] : [])].join(' | ') +
+    ' |'
+  const sep = '| ' + cols.map(() => '---').join(' | ') + ' |'
+  return [cols.join(' | ')
+    .replace(/^/, '| ')
+    .replace(/$/, ' |'), sep, ...uniq.map(row)].join('\n')
+}
+
+// Реэкспорт парсеров CSV — UI редактора пользуется ими напрямую.
+export { entriesFromCsv, entriesToCsv }

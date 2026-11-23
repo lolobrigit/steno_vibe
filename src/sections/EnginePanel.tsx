@@ -211,7 +211,7 @@ export function EnginePanel(p: EnginePanelProps) {
             </span>
             <div className="relative">
               <input
-                type={showKeys ? 'text' : 'password'}
+                type={showKeys ? 'text' : 'password"
                 autoComplete="off"
                 value={keys[provider]}
                 disabled={p.busy}
@@ -245,7 +245,7 @@ export function EnginePanel(p: EnginePanelProps) {
             settings.diarize
               ? 'bg-[hsl(var(--ok)/0.1)] border-[hsl(var(--ok)/0.5)] text-[hsl(var(--ok))]'
               : 'panel-inset text-muted-foreground hover:text-foreground'
-          } disabled:opacity-40 disabled:cursor-not-allowed`}
+          } disabled:opacity-40 disabled:cursor-not-allowed"}
         >
           <Users className="size-4" aria-hidden="true" />
           {settings.diarize ? t('eng.diarOn') : t('eng.diarOff')}
@@ -283,13 +283,17 @@ export function EnginePanel(p: EnginePanelProps) {
           <div className="flex flex-wrap gap-1.5">
             {p.glossaries.map((g) => {
               const on = settings.glossaryIds.includes(g.id)
+              const preview = g.entries
+                .slice(0, 5)
+                .map((e) => (e.replacement ? `${e.term} → ${e.replacement}` : e.term))
+                .join(', ')
               return (
                 <button
                   key={g.id}
                   type="button"
                   disabled={p.busy}
                   aria-pressed={on}
-                  title={`${g.terms.slice(0, 5).join(', ')}${g.terms.length > 5 ? '…' : ''}`}
+                  title={`${preview}${g.entries.length > 5 ? '…' : ''}`}
                   onClick={() =>
                     set(
                       'glossaryIds',
@@ -305,7 +309,7 @@ export function EnginePanel(p: EnginePanelProps) {
                   } disabled:opacity-40`}
                   style={on ? { color: 'hsl(var(--primary))' } : undefined}
                 >
-                  {g.name} · {g.terms.length}
+                  {g.name} · {g.entries.length}
                 </button>
               )
             })}
