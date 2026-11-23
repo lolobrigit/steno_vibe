@@ -22,7 +22,7 @@ import {
   toDialog,
 } from '@/lib/transcript'
 import {
-  glossaryPromptText,
+  glossaryTableText,
   loadLlmButtons,
   loadLlmModel,
   saveLlmModel,
@@ -157,15 +157,21 @@ export function AiPanel({
     }
   }
 
-  /** Промпт кнопки + термины её справочника (или справочников из «Движка»). */
+  /**
+   * Промпт кнопки + термины её справочника (или справочников из «Движка»).
+   * Термины уходят в LLM markdown-таблицей (term | replacement | note),
+   * а не одной строкой — так модель видит пояснения и категории.
+   */
   const withGlossary = (prompt: string, glossaryId?: string | null): string => {
-    const hint = glossaryId
-      ? glossaryPromptText(glossaries, [glossaryId]) ||
-        glossaryPromptText(glossaries, settings.glossaryIds)
-      : glossaryPromptText(glossaries, settings.glossaryIds)
-    if (!hint) return prompt
-    if (prompt.includes('{glossary}')) return prompt.replace('{glossary}', hint)
-    return `${prompt}\n\nGlossary of terms to use: ${hint}`
+    const ids = glossaryId
+      ? glossaryTableText(glossaries, [glossaryId])
+        ? [glossaryId]
+        : settings.glossaryIds
+      : settings.glossaryIds
+    const table = glossaryTableText(glossaries, ids)
+    if (!table) return prompt
+    if (prompt.includes('{glossary}')) return prompt.replace('{glossary}', table)
+    return `${prompt}\n\nGlossary of terms to use (columns: term | replacement | note):\n${table}`
   }
 
   // скачивание локальной модели: байты из менеджера загрузок → статус и задача
@@ -547,7 +553,7 @@ export function AiPanel({
                 parsed
                   ? 'bg-[hsl(var(--primary)/0.1)] border-[hsl(var(--primary)/0.5)]'
                   : 'border-[hsl(var(--border))] text-muted-foreground hover:text-foreground'
-              }`}
+              }`
               style={parsed ? { color: 'hsl(var(--primary))' } : undefined}
             >
               {applied ? (
