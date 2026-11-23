@@ -553,7 +553,7 @@ export function AiPanel({
                 parsed
                   ? 'bg-[hsl(var(--primary)/0.1)] border-[hsl(var(--primary)/0.5)]'
                   : 'border-[hsl(var(--border))] text-muted-foreground hover:text-foreground'
-              }`
+              }`}
               style={parsed ? { color: 'hsl(var(--primary))' } : undefined}
             >
               {applied ? (
