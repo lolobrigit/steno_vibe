@@ -211,7 +211,7 @@ export function EnginePanel(p: EnginePanelProps) {
             </span>
             <div className="relative">
               <input
-                type={showKeys ? 'text' : 'password"
+                type={showKeys ? 'text' : 'password'}
                 autoComplete="off"
                 value={keys[provider]}
                 disabled={p.busy}
@@ -245,7 +245,7 @@ export function EnginePanel(p: EnginePanelProps) {
             settings.diarize
               ? 'bg-[hsl(var(--ok)/0.1)] border-[hsl(var(--ok)/0.5)] text-[hsl(var(--ok))]'
               : 'panel-inset text-muted-foreground hover:text-foreground'
-          } disabled:opacity-40 disabled:cursor-not-allowed"}
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           <Users className="size-4" aria-hidden="true" />
           {settings.diarize ? t('eng.diarOn') : t('eng.diarOff')}
