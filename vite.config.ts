@@ -3,7 +3,6 @@ import path from "path"
 const __dirname = import.meta.dirname
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin } from "vite"
-import { inspectAttr } from 'kimi-plugin-inspect-react'
 
 // Версия приложения: из APP_VERSION (env при сборке Docker) или из .env,
 // иначе — из package.json
@@ -78,7 +77,7 @@ export default defineConfig({
   },
   plugins: [
     devServer({ entry: "api/boot.ts", exclude: [/^\/(?!api\/).*$/] }),
-    inspectAttr(), react(), stenoSeo()],
+    react(), stenoSeo()],
   server: {
     port: 3000,
   },

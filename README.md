@@ -25,7 +25,7 @@
 
 ## Стек
 
-React 19, Vite 7, TypeScript, Tailwind CSS, shadcn/ui (40+ компонентов), TanStack Query, tRPC (клиент и сервер), Hono, Drizzle ORM, MySQL, jose (JWT), transformers.js, FFmpeg.wasm, Vitest.
+React 19, Vite 7, TypeScript, Tailwind CSS, shadcn/ui (40+ компонентов), TanStack Query, tRPC (клиент и сервер), Hono, Drizzle ORM, MySQL, transformers.js, FFmpeg.wasm, Vitest.
 
 ## Быстрый старт
 
@@ -57,10 +57,8 @@ npm run test
 
 | Группа | Переменные | Назначение |
 | --- | --- | --- |
-| Backend | `APP_ID`, `APP_SECRET` | подпись JWT |
 | Database | `DATABASE_URL` | строка подключения MySQL |
-| Auth (Kimi) | `KIMI_AUTH_URL`, `KIMI_OPEN_URL`, `OWNER_UNION_ID` | OAuth и роль администратора |
-| Frontend | `VITE_KIMI_AUTH_URL`, `VITE_APP_ID`, `APP_VERSION` | OAuth-клиент в браузере |
+| Frontend | `APP_VERSION` | версия приложения (подставляется в футер) |
 | SEO | `SITE_URL` | canonical, hreflang, sitemap, JSON-LD |
 | Облачный экспорт | `VITE_GDRIVE_CLIENT_ID`, `VITE_YANDEX_CLIENT_ID`, `VITE_DROPBOX_APP_KEY` | браузерный OAuth (необязательно) |
 | Google Drive (сервер) | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | вход выполняет сервер, секрет не попадает в браузер |
@@ -77,7 +75,7 @@ src/
   workers/       Web Workers: whisper.worker, diarize.worker, ai.worker
   i18n/          словари (13 языков, lazy-loaded)
   components/    shadcn/ui + Waveform
-api/             tRPC-роутеры, middleware, auth-router, серверный прокси (/api/proxy/ai, /api/proxy/asr)
+api/             tRPC-роутеры, middleware, серверный прокси (/api/proxy/ai, /api/proxy/asr)
 db/              Drizzle schema, relations, migrations, seed
 contracts/       общие типы и константы фронт/бэк
 docs/            NATIVE_APPS.md — нативные клиенты (macOS/Windows/iOS/Android)
