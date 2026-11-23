@@ -1,34 +1,11 @@
-import {
-  mysqlTable,
-  mysqlEnum,
-  serial,
-  varchar,
-  text,
-  timestamp,
-  // bigint,
-} from "drizzle-orm/mysql-core";
-
-export const users = mysqlTable("users", {
-  id: serial("id").primaryKey(),
-  unionId: varchar("unionId", { length: 255 }).notNull().unique(),
-  name: varchar("name", { length: 255 }),
-  email: varchar("email", { length: 320 }),
-  avatar: text("avatar"),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt")
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date()),
-  lastSignInAt: timestamp("lastSignInAt").defaultNow().notNull(),
-});
-
-export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
-
-// TODO: Add your tables here. See docs/Database.md for schema examples and patterns.
+// Таблицы БД. Аутентификация по Kimi OAuth удалена — таблица users больше
+// не нужна. Добавляйте таблицы здесь по мере роста приложения.
+// См. docs/Database.md для примеров и паттернов.
 //
-// Example:
+// Пример:
+// import {
+//   mysqlTable, serial, varchar, text, timestamp,
+// } from "drizzle-orm/mysql-core";
 // export const posts = mysqlTable("posts", {
 //   id: serial("id").primaryKey(),
 //   title: varchar("title", { length: 255 }).notNull(),
@@ -36,5 +13,5 @@ export type InsertUser = typeof users.$inferInsert;
 //   createdAt: timestamp("created_at").notNull().defaultNow(),
 // });
 //
-// Note: FK columns referencing a serial() PK must use:
+// Примечание: FK-колонки, ссылающиеся на serial()-PK, должны использовать:
 //   bigint("columnName", { mode: "number", unsigned: true }).notNull()
