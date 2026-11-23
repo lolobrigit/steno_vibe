@@ -18,7 +18,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { termsFromCsv, termsToCsv } from '@/lib/glossaryCsv'
+import { entriesFromCsv, entriesToCsv } from '@/lib/glossaryCsv'
 import { downloadFile } from '@/lib/exporters'
 import { AI_ACTIONS, LOCAL_MODELS } from '@/lib/models'
 import { formatBytes } from '@/lib/audio'
@@ -60,6 +60,7 @@ import {
   saveLlmButtons,
   type AppSettings,
   type Glossary,
+  type GlossaryEntry,
   type LlmButton,
 } from '@/lib/storage'
 import { useDownloads } from '@/hooks/useDownloads'
@@ -90,33 +91,85 @@ interface RowInfo {
 }
 
 /**
- * Список терминов: пока пользователь печатает, хранится «сырой» текст, иначе
- * пробел и перенос строки в конце срезались бы сразу (пустые строки отбрасываются
- * при разборе). Внешние изменения (импорт CSV) подхватываются по смене массива.
+ * Дедуп по term: существующие записи приоритетнее, но недостающие поля
+ * (replacement/note) докидываются из импортированных. Используется при
+ * импорте CSV в существующий справочник.
  */
-function TermsEditor({ terms, onChange, placeholder }: { terms: string[]; onChange: (t: string[]) => void; placeholder: string }) {
-  const [text, setText] = useState(terms.join('\n'))
-  const last = useRef(terms)
-  useEffect(() => {
-    if (terms !== last.current) {
-      last.current = terms
-      setText(terms.join('\n'))
+function mergeEntries(existing: GlossaryEntry[], imported: GlossaryEntry[]): GlossaryEntry[] {
+  const map = new Map<string, GlossaryEntry>()
+  for (const e of [...existing, ...imported]) {
+    const term = e.term.trim()
+    if (!term) continue
+    const key = term.toLowerCase()
+    const prev = map.get(key)
+    if (!prev) map.set(key, { ...e, term })
+    else {
+      prev.replacement ??= e.replacement?.trim() || undefined
+      prev.note ??= e.note?.trim() || undefined
     }
-  }, [terms])
+  }
+  return [...map.values()]
+}
+
+const entryInputCls =
+  'panel-inset px-2 py-1.5 text-xs bg-transparent text-foreground focus:outline-none focus-visible:outline-2 focus-visible:outline-[hsl(var(--ring))] w-full min-w-0'
+
+/**
+ * Редактор справочника: три колонки — термин / замена / пояснение.
+ * Пояснение (note) уходит в промпт LLM столбцом, но не в initial_prompt Whisper.
+ * Внешние изменения (импорт CSV) подхватываются по смене массива entries.
+ */
+function EntriesEditor({ entries, onChange }: { entries: GlossaryEntry[]; onChange: (e: GlossaryEntry[]) => void }) {
+  const set = (i: number, patch: Partial<GlossaryEntry>) =>
+    onChange(entries.map((e, idx) => (idx === i ? { ...e, ...patch } : e)))
+  const add = () => onChange([...entries, { term: '' }])
+  const remove = (i: number) => onChange(entries.filter((_, idx) => idx !== i))
   return (
-    <textarea
-      value={text}
-      onChange={(e) => {
-        const v = e.target.value
-        setText(v)
-        const next = v.split('\n').map((x) => x.trim()).filter(Boolean)
-        last.current = next
-        onChange(next)
-      }}
-      rows={4}
-      placeholder={placeholder}
-      className="panel-inset px-2.5 py-2 text-xs font-mono bg-transparent text-foreground resize-y min-h-16 focus:outline-none focus-visible:outline-2 focus-visible:outline-[hsl(var(--ring))] w-full"
-    />
+    <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-[1fr_1fr_1.4fr_28px] gap-1.5 chrome-label !text-[10px] text-muted-foreground">
+        <span>term</span>
+        <span>→ replacement</span>
+        <span>note / пояснение</span>
+        <span />
+      </div>
+      {entries.map((e, i) => (
+        <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr_28px] gap-1.5 items-center">
+          <input
+            value={e.term}
+            onChange={(ev) => set(i, { term: ev.target.value })}
+            placeholder="термин"
+            className={entryInputCls}
+          />
+          <input
+            value={e.replacement ?? ''}
+            onChange={(ev) => set(i, { replacement: ev.target.value || undefined })}
+            placeholder="Keycloak"
+            className={entryInputCls}
+          />
+          <input
+            value={e.note ?? ''}
+            onChange={(ev) => set(i, { note: ev.target.value || undefined })}
+            placeholder="категория / определение"
+            className={entryInputCls}
+          />
+          <button
+            type="button"
+            onClick={() => remove(i)}
+            aria-label="delete row"
+            className="size-7 shrink-0 inline-flex items-center justify-center text-muted-foreground/60 hover:text-[hsl(var(--err))] cursor-pointer"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="btn-console !min-h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer self-start"
+      >
+        <Plus className="size-3" aria-hidden="true" /> row
+      </button>
+    </div>
   )
 }
 
@@ -556,7 +609,7 @@ export function SettingsModal({
   const addGlossary = () =>
     onGlossaries([
       ...glossaries,
-      { id: crypto.randomUUID(), name: t('set.gl.defaultName', { n: glossaries.length + 1 }), terms: [] },
+      { id: crypto.randomUUID(), name: t('set.gl.defaultName', { n: glossaries.length + 1 }), entries: [] },
     ])
 
   const patchGlossary = (id: string, patch: Partial<Glossary>) =>
@@ -1228,7 +1281,7 @@ export function SettingsModal({
                       className={inputCls}
                     />
                     <span className="font-mono text-[10px] text-muted-foreground shrink-0">
-                      {g.terms.length}
+                      {g.entries.length}
                     </span>
                     <button
                       type="button"
@@ -1239,10 +1292,9 @@ export function SettingsModal({
                       <Trash2 className="size-3.5" aria-hidden="true" />
                     </button>
                   </div>
-                  <TermsEditor
-                    terms={g.terms}
-                    onChange={(terms) => patchGlossary(g.id, { terms })}
-                    placeholder={'Keycloak\nJWT\nК-клок = Keycloak\n…'}
+                  <EntriesEditor
+                    entries={g.entries}
+                    onChange={(entries) => patchGlossary(g.id, { entries })}
                   />
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -1257,8 +1309,8 @@ export function SettingsModal({
                     </button>
                     <button
                       type="button"
-                      disabled={g.terms.length === 0}
-                      onClick={() => downloadFile(`${g.name || 'glossary'}.csv`, termsToCsv(g.terms), 'text/csv')}
+                      disabled={g.entries.length === 0}
+                      onClick={() => downloadFile(`${g.name || 'glossary'}.csv`, entriesToCsv(g.entries), 'text/csv')}
                       className="btn-console !min-h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-40"
                     >
                       <Download className="size-3" aria-hidden="true" /> {t('set.gl.csvExport')}
@@ -1293,15 +1345,15 @@ export function SettingsModal({
                   const f = e.target.files?.[0]
                   e.target.value = ''
                   if (!f) return
-                  const terms = termsFromCsv(await f.text())
+                  const imported = entriesFromCsv(await f.text())
                   const target = csvTarget.current
                   if (target) {
                     const g = glossaries.find((x) => x.id === target)
-                    if (g) patchGlossary(g.id, { terms: [...new Set([...g.terms, ...terms])] })
+                    if (g) patchGlossary(g.id, { entries: mergeEntries(g.entries, imported) })
                   } else {
                     onGlossaries([
                       ...glossaries,
-                      { id: crypto.randomUUID(), name: f.name.replace(/\.[^.]+$/, '') || t('set.gl.defaultName', { n: glossaries.length + 1 }), terms },
+                      { id: crypto.randomUUID(), name: f.name.replace(/\.[^.]+$/, '') || t('set.gl.defaultName', { n: glossaries.length + 1 }), entries: imported },
                     ])
                   }
                 }}
