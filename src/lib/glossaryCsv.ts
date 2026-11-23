@@ -1,5 +1,8 @@
-// Справочники терминов ⇄ CSV. Один термин — одна строка; пара «слово → расшифровка»
-// хранится как «слово = расшифровка» (так её понимают Whisper-подсказка и LLM).
+// Справочники терминов ⇄ CSV. Запись — три колонки: term, replacement, note.
+// Совместимо со старым форматом «слово = расшифровка» в одной строке: при
+// загрузке мигрирует в { term, replacement }, note остаётся пустым.
+
+import type { GlossaryEntry } from './storage'
 
 /** Простой разбор CSV с кавычками; разделитель определяется по первой строке (, ; или табуляция). */
 export function parseCsv(text: string): string[][] {
@@ -38,33 +41,98 @@ export function parseCsv(text: string): string[][] {
   return rows
 }
 
-const HEADERS = new Set(['term', 'terms', 'word', 'термин', 'слово', 'термины'])
+const TERM_HEADERS = new Set(['term', 'terms', 'word', 'термин', 'слово', 'термины'])
+const REPLACEMENT_HEADERS = new Set([
+  'replacement', 'transcription', 'transcribe', 'canonical', 'расшифровка',
+  'замена', 'канон', 'вариант',
+])
+const NOTE_HEADERS = new Set([
+  'note', 'notes', 'comment', 'description', 'context', 'category', 'definition',
+  'пояснение', 'комментарий', 'описание', 'категория', 'определение', 'пример',
+])
 
-/** Строки CSV → термины. Первая колонка — термин, вторая (если есть) — расшифровка; заголовок пропускается. */
-export function termsFromCsv(text: string): string[] {
-  const rows = parseCsv(text)
-    .map((r) => r.map((c) => c.trim()))
-    .filter((r) => r.some(Boolean))
-  if (rows.length && HEADERS.has(rows[0][0].toLowerCase())) rows.shift()
-  const out: string[] = []
-  for (const r of rows) {
-    const term = r[0]
-    if (!term) continue
-    out.push(r[1] ? `${term} = ${r[1]}` : term)
+/** Плоская строка «a = b» (или просто «a») → запись. */
+export function flatToEntry(flat: string): GlossaryEntry {
+  const s = flat.trim()
+  const i = s.indexOf(' = ')
+  if (i > 0) return { term: s.slice(0, i).trim(), replacement: s.slice(i + 3).trim() || undefined }
+  return { term: s }
+}
+
+/** Запись → плоская строка «term = replacement» (или просто «term»). note теряется. */
+export function entryToFlat(e: GlossaryEntry): string {
+  const term = e.term.trim()
+  const repl = e.replacement?.trim()
+  return repl ? `${term} = ${repl}` : term
+}
+
+/**
+ * CSV → записи. Поддерживает заголовки (term/replacement/note, включая
+ * русские синонимы); без заголовка первая колонка — term, вторая — replacement,
+ * третья — note. Лишние колонки игнорируются.
+ */
+export function entriesFromCsv(text: string): GlossaryEntry[] {
+  const rows = parseCsv(text).map((r) => r.map((c) => c.trim()))
+  let termIdx = 0
+  let replIdx = 1
+  let noteIdx = 2
+  // первая непустая строка может быть заголовком
+  const firstNonEmpty = rows.find((r) => r.some(Boolean))
+  if (firstNonEmpty) {
+    const lower = firstNonEmpty.map((c) => c.toLowerCase())
+    const isHeader = lower.some((c) =>
+      TERM_HEADERS.has(c) || REPLACEMENT_HEADERS.has(c) || NOTE_HEADERS.has(c),
+    )
+    if (isHeader) {
+      termIdx = lower.findIndex((c) => TERM_HEADERS.has(c))
+      replIdx = lower.findIndex((c) => REPLACEMENT_HEADERS.has(c))
+      noteIdx = lower.findIndex((c) => NOTE_HEADERS.has(c))
+      if (termIdx < 0) termIdx = 0
+      if (replIdx < 0) replIdx = -1
+      if (noteIdx < 0) noteIdx = -1
+      // отбрасываем строку заголовка
+      const headerRowIdx = rows.indexOf(firstNonEmpty)
+      rows.splice(headerRowIdx, 1)
+    }
   }
-  return [...new Set(out)]
+  const out: GlossaryEntry[] = []
+  for (const r of rows) {
+    if (!r.some(Boolean)) continue
+    const term = r[termIdx] ?? ''
+    if (!term) continue
+    const replacement = replIdx >= 0 ? (r[replIdx] ?? '').trim() : ''
+    const note = noteIdx >= 0 ? (r[noteIdx] ?? '').trim() : ''
+    out.push({
+      term,
+      replacement: replacement || undefined,
+      note: note || undefined,
+    })
+  }
+  return out
 }
 
 function cell(v: string): string {
   return /[",;\n\r\t]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
 }
 
-/** Термины → CSV (две колонки: term, replacement). */
-export function termsToCsv(terms: string[]): string {
-  const lines = ['term,replacement']
-  for (const t of terms) {
-    const i = t.indexOf(' = ')
-    lines.push(i > 0 ? `${cell(t.slice(0, i).trim())},${cell(t.slice(i + 3).trim())}` : cell(t))
+/** Записи → CSV (заголовок term,replacement,note + строки; пустые ячейки пустые). */
+export function entriesToCsv(entries: GlossaryEntry[]): string {
+  const lines = ['term,replacement,note']
+  for (const e of entries) {
+    lines.push([cell(e.term), cell(e.replacement ?? ''), cell(e.note ?? '')].join(','))
   }
   return lines.join('\r\n') + '\r\n'
+}
+
+// ── Совместимость со старым API (плоские строки «a = b») ──────────
+// Используется только тестами и переходным кодом; новый UI работает с записями.
+
+/** @deprecated используйте entriesFromCsv */
+export function termsFromCsv(text: string): string[] {
+  return entriesFromCsv(text).map(entryToFlat)
+}
+
+/** @deprecated используйте entriesToCsv */
+export function termsToCsv(terms: string[]): string {
+  return entriesToCsv(terms.map(flatToEntry))
 }
